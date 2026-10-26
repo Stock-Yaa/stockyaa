@@ -1,0 +1,77 @@
+import type en from "../en/transfers";
+
+const transfers: typeof en = {
+  title: "โอนย้ายสต็อก",
+  description:
+    "ย้ายสต็อกระหว่างสาขา สต็อกจะออกจากสาขาต้นทางเมื่อส่ง และเข้าสต็อกสาขาปลายทางเมื่อกดรับ",
+  new: "สร้างการโอนย้าย",
+  newDescription: "ส่งสต็อกจาก {branch} ไปยังสาขาอื่น",
+  fefoHint: "ระบบจะตัดสต็อกจากล็อตที่หมดอายุก่อน โดยเลขล็อต วันหมดอายุ และต้นทุนจะติดไปกับสินค้า",
+
+  reference: "เลขที่",
+  from: "จาก",
+  to: "ถึง",
+  toBranch: "ส่งไปที่",
+  selectBranch: "เลือกสาขา",
+  sentAt: "วันที่ส่ง",
+  sentBy: "ผู้ส่ง",
+  receivedAt: "วันที่รับ",
+  receivedBy: "ผู้รับ",
+  cancelledAt: "วันที่ยกเลิก",
+  cancelledBy: "ผู้ยกเลิก",
+  details: "รายละเอียดการโอนย้าย",
+
+  statusInTransit: "ระหว่างขนส่ง",
+  statusReceived: "รับแล้ว",
+  statusCancelled: "ยกเลิกแล้ว",
+
+  items: "รายการสินค้า",
+  product: "สินค้า",
+  selectProduct: "เลือกสินค้า",
+  available: "คงเหลือ {count}",
+  batchNumber: "ล็อต",
+  expiryDate: "วันหมดอายุ",
+  costPrice: "ต้นทุน",
+  value: "มูลค่า",
+  totalValue: "มูลค่ารวม",
+  units: "จำนวน",
+  addItem: "เพิ่มรายการ",
+  removeItem: "ลบรายการ",
+  itemsRequired: "เพิ่มสินค้าอย่างน้อยหนึ่งรายการ",
+
+  send: "ส่งสต็อก",
+  receive: "รับสินค้า",
+  receiveTitle: "รับการโอนย้ายนี้?",
+  receiveBody: "สินค้าจะถูกเพิ่มเข้าสต็อกของ {branch}",
+  received: "รับการโอนย้ายแล้ว",
+  cancel: "ยกเลิกการโอนย้าย",
+  cancelTitle: "ยกเลิกการโอนย้ายนี้?",
+  cancelBody: "สินค้าจะกลับเข้าสต็อกของ {branch}",
+  cancelled: "ยกเลิกการโอนย้ายแล้ว",
+
+  insufficientStock: "{name} มีสต็อกไม่พอ: คงเหลือ {available} ในสาขานี้",
+  sameBranch: "โปรดเลือกสาขาอื่นเป็นปลายทาง",
+  notAllowedReceive: "เฉพาะสาขาปลายทางเท่านั้นที่รับการโอนย้ายนี้ได้",
+  notAllowedCancel: "เฉพาะสาขาต้นทางเท่านั้นที่ยกเลิกการโอนย้ายนี้ได้",
+  notInTransit: "การโอนย้ายนี้ไม่ได้อยู่ระหว่างขนส่งแล้ว",
+
+  noOtherBranch: "ไม่มีสาขาอื่นให้ส่ง",
+  noOtherBranchHint: "การโอนย้ายต้องมีสาขาที่เปิดใช้งานอย่างน้อยสองสาขา",
+  noStock: "ไม่มีสต็อกให้ส่ง",
+  noStockHint: "สาขานี้ไม่มีสต็อกที่ขายได้",
+  empty: "ยังไม่มีการโอนย้าย",
+  emptyHint: "การโอนย้ายเข้าและออกจากสาขานี้จะแสดงที่นี่",
+  emptyAll: "การโอนย้ายระหว่างสาขาของคุณจะแสดงที่นี่",
+
+  direction: "ทิศทาง",
+  directionAll: "ทั้งขาเข้าและขาออก",
+  incoming: "ขาเข้า",
+  outgoing: "ขาออก",
+  allStatuses: "ทุกสถานะ",
+  thisBranch: "สาขานี้",
+  awaiting: "มีการโอนย้ายขาเข้า {count} รายการรอรับสินค้า",
+  awaitingOne: "มีการโอนย้ายขาเข้า 1 รายการรอรับสินค้า",
+  viewTransfers: "ดูการโอนย้าย",
+};
+
+export default transfers;

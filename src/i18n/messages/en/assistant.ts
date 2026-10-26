@@ -1,0 +1,60 @@
+const assistant = {
+  title: "AI Assistant",
+  subtitle: "Ask anything about your pharmacy data",
+  greeting: "How can I help you today?",
+  intro: "I can answer questions about your sales, inventory, customers, profits and expenses.",
+  suggested: "Suggested questions",
+  placeholder: "Ask anything about your pharmacy data...",
+  send: "Send",
+  newChat: "New chat",
+  thinking: "Looking at your data…",
+  error: "Something went wrong. Please try again.",
+  notUnderstood:
+    "Sorry, I can't answer that yet. I can answer questions like these. Pick one or ask in other words:",
+  // Suggested questions
+  qBestSeller: "What was my best selling product this month?",
+  qExpiring: "Show me expiring items",
+  qRevenueWeek: "How much revenue did I make this week?",
+  qInactiveCustomers: "Which customers haven't visited recently?",
+  qProfitMargin: "What is my current profit margin?",
+  qLowStock: "Show me low stock items",
+  qTopExpenses: "What are my top expenses?",
+  qSalesToday: "How many sales did I make today?",
+  // Answers
+  branchNote: "Figures for {branch}",
+  noSalesMonth: "There are no sales yet this month.",
+  bestSeller:
+    "Your best seller this month is {name}: {quantity} sold for {revenue}. Here are your top products:",
+  unitsSold: "{count} sold",
+  noSalesWeek: "There were no sales in the last 7 days.",
+  revenueWeek: "In the last 7 days ({from} – {to}) you made {revenue} from {count} sales.",
+  profitMargin:
+    "Your gross profit margin this month is {percent}%: {profit} of profit on your sales before tax.",
+  salesBeforeTax: "Sales before tax",
+  costOfGoods: "Cost of goods sold",
+  grossProfit: "Gross profit",
+  noExpenses: "No expenses have been recorded this month.",
+  topExpenses:
+    "Your expenses this month come to {total}. The largest category is {category} at {amount}.",
+  entries: "{count} entries",
+  noExpiring: "No batches in stock expire in the next {days} days.",
+  expiring: "{count} batches expire in the next {days} days. The soonest:",
+  batchLine: "Batch {batch} · {quantity} {unit}",
+  noLowStock: "No products are at or below their reorder level.",
+  lowStock: "{count} products are at or below their reorder level:",
+  reorderAt: "Reorder at {level}",
+  noCustomers: "No customer has a recorded purchase yet.",
+  allCustomersActive: "Every customer with a purchase has visited in the last {days} days.",
+  inactiveCustomers:
+    "{count} customers have not bought anything in the last {days} days. Your biggest spenders among them:",
+  lastVisit: "Last visit {date}",
+  noSalesToday: "There are no sales yet today.",
+  salesToday: "Today you have made {count} sales, worth {revenue}.",
+  openReports: "Open reports",
+  openExpenses: "Open expenses",
+  openAlerts: "Open stock alerts",
+  openInsights: "Open customer insights",
+  openSales: "Open sales history",
+};
+
+export default assistant;

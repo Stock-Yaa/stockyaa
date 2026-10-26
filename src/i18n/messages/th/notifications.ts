@@ -1,0 +1,35 @@
+import type en from "../en/notifications";
+
+const notifications: typeof en = {
+  title: "การแจ้งเตือน",
+  description: "แจ้งเตือนสต็อก สินค้าใกล้หมดอายุ และการสมัครสมาชิก",
+  scanNow: "สแกนตอนนี้",
+  markAllRead: "อ่านทั้งหมดแล้ว",
+  scanned: "สแกนเสร็จแล้ว",
+  allRead: "ทำเครื่องหมายว่าอ่านแล้วทั้งหมด",
+  all: "ทั้งหมด",
+  unread: "ยังไม่อ่าน ({count})",
+  unreadDot: "ยังไม่อ่าน",
+  empty: "ไม่มีการแจ้งเตือนใหม่",
+  emptyHint: "การแจ้งเตือนเรื่องสต็อกต่ำ สินค้าใกล้หมดอายุ และการสมัครสมาชิกจะแสดงที่นี่",
+  emptyUnread: "ไม่มีการแจ้งเตือนที่ยังไม่อ่าน",
+  justNow: "เมื่อสักครู่",
+  minutesAgo: "{count} นาทีที่แล้ว",
+  hoursAgo: "{count} ชม. ที่แล้ว",
+  noBatchNumber: "ไม่มีเลข",
+  branch: "สาขา: {name}",
+  outOfStockTitle: "สินค้าหมด: {name}",
+  outOfStockBody: "{name} ไม่มีสต็อกที่ขายได้แล้ว จุดสั่งซื้อคือ {reorderLevel} {unit}",
+  lowStockTitle: "สต็อกต่ำ: {name}",
+  lowStockBody: "{name} เหลือเพียง {quantity} {unit} จุดสั่งซื้อคือ {reorderLevel}",
+  expiredTitle: "หมดอายุ: {name}",
+  expiredBody: "ล็อต {batch} หมดอายุเมื่อ {date} ยังมี {quantity} {unit} อยู่ในสต็อก ควรนำออกจากการขาย",
+  expiringTitle: "ใกล้หมดอายุ: {name}",
+  expiringBody: "ล็อต {batch} จะหมดอายุวันที่ {date} มีในสต็อก {quantity} {unit}",
+  subscriptionEndedTitle: "การสมัครสมาชิกสิ้นสุดแล้ว",
+  subscriptionEndedBody: "การสมัครสมาชิกของคุณสิ้นสุดเมื่อ {date} ต่ออายุเพื่อใช้งาน Stockyaa ต่อ",
+  subscriptionEndingTitle: "การสมัครสมาชิกใกล้สิ้นสุด",
+  subscriptionEndingBody: "การสมัครสมาชิกของคุณจะสิ้นสุดวันที่ {date} ต่ออายุเพื่อไม่ให้การใช้งานหยุดชะงัก",
+};
+
+export default notifications;

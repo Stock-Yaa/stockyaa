@@ -1,0 +1,46 @@
+const settings = {
+  title: "Settings",
+  description: "Your pharmacy profile and your own account.",
+
+  // Pharmacy profile
+  profileTitle: "Pharmacy profile",
+  profileDescription: "Printed on receipts and used for prices, dates and stock alerts.",
+  adminOnly: "Only a pharmacy admin can change the pharmacy profile.",
+  pharmacyName: "Pharmacy name",
+  licenseNumber: "Licence number",
+  taxId: "Tax ID",
+  currency: "Currency",
+  timezone: "Time zone",
+  taxRate: "Tax rate (%)",
+  taxRateHint: "Added on top of the sale subtotal at the point of sale. 0 hides the tax line.",
+  taxRateRange: "Enter a rate from 0 to 100",
+  expiryAlertDays: "Expiry alert (days)",
+  expiryAlertDaysHint: "Batches expiring within this many days are flagged as expiring soon.",
+  expiryAlertDaysRange: "Enter a whole number of days from 1 to 365",
+  receiptFooter: "Receipt footer",
+  receiptFooterHint: "Printed at the bottom of every receipt.",
+  invalidOption: "Choose one of the listed options",
+  profileSaved: "Pharmacy profile saved",
+
+  // My account
+  accountTitle: "My account",
+  accountDescription: "Your name as shown in the system.",
+  myProfileDescription: "Your name, sign-in email and password.",
+  yourName: "Your name",
+  signInEmail: "Sign-in email",
+  signInEmailHint: "Contact the platform administrator to change your email.",
+  nameSaved: "Name saved",
+  passwordTitle: "Change password",
+  passwordDescription: "Use a password that you do not use anywhere else.",
+  currentPassword: "Current password",
+  newPassword: "New password",
+  confirmPassword: "Confirm new password",
+  passwordHint: "At least 8 characters.",
+  passwordTooShort: "Password must be at least 8 characters",
+  passwordMismatch: "The passwords do not match",
+  currentPasswordWrong: "The current password is incorrect",
+  changePassword: "Change password",
+  passwordChanged: "Password changed",
+};
+
+export default settings;

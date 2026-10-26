@@ -1,0 +1,87 @@
+import type en from "../en/products";
+
+const products: typeof en = {
+  title: "สินค้า",
+  description: "ยาและสินค้าอื่น ๆ ที่ร้านจำหน่าย",
+  add: "เพิ่มสินค้า",
+  edit: "แก้ไขสินค้า",
+  searchPlaceholder: "ค้นหาด้วยชื่อสินค้า ชื่อสามัญทางยา หรือบาร์โค้ด…",
+  empty: "ยังไม่มีสินค้า",
+  emptyHint: "เพิ่มยาและสินค้าที่ร้านจำหน่ายเพื่อเริ่มติดตามสต็อก",
+
+  // Filters
+  filterCategory: "หมวดหมู่",
+  filterStatus: "สถานะ",
+  allCategories: "ทุกหมวดหมู่",
+  uncategorised: "ไม่มีหมวดหมู่",
+  statusActive: "จำหน่ายอยู่",
+  statusArchived: "เลิกจำหน่าย",
+  statusAll: "ทั้งที่จำหน่ายอยู่และเลิกจำหน่าย",
+
+  // Table
+  product: "สินค้า",
+  category: "หมวดหมู่",
+  salePrice: "ราคาขาย",
+  stock: "คงเหลือ",
+  lowStock: "ใกล้หมด",
+  outOfStock: "สินค้าหมด",
+  rx: "Rx",
+  rxHint: "ต้องมีใบสั่งแพทย์",
+
+  // Form
+  genericName: "ชื่อสามัญทางยา",
+  noCategory: "ไม่ระบุหมวดหมู่",
+  manufacturer: "ผู้ผลิต",
+  dosageForm: "รูปแบบยา",
+  dosageFormPlaceholder: "ยาเม็ด แคปซูล ยาน้ำ…",
+  strength: "ขนาดยา",
+  strengthPlaceholder: "500 มก.",
+  barcode: "บาร์โค้ด",
+  unit: "หน่วยขาย",
+  unitHint: "เช่น แผง ขวด หรือกล่อง",
+  salePriceWithCurrency: "ราคาขาย ({currency})",
+  costPriceWithCurrency: "ราคาทุน ({currency})",
+  costPriceHint: "ราคาทุนต่อหน่วยที่ใช้เป็นค่าเริ่มต้นเมื่อสั่งซื้อสินค้า",
+  reorderLevel: "จุดสั่งซื้อ",
+  reorderLevelHint: "แจ้งว่าสินค้าใกล้หมดเมื่อสาขาใดมีคงเหลือเท่ากับหรือน้อยกว่าจำนวนนี้",
+  requiresPrescription: "ต้องมีใบสั่งแพทย์",
+  openingStock: "สต็อกเริ่มต้น",
+  openingStockHint:
+    "ไม่บังคับ กรอกจำนวนที่มีอยู่ที่ {branch} ตอนนี้ หรือเว้นจำนวนว่างไว้แล้วค่อยเพิ่มสต็อกภายหลัง",
+  openingQuantity: "จำนวนที่มีอยู่",
+  batchNumber: "เลขที่ล็อต",
+  expiryDate: "วันหมดอายุ",
+  categoryMissing: "ไม่พบหมวดหมู่นี้แล้ว กรุณาเลือกหมวดหมู่อื่น",
+  numberTooLarge: "ตัวเลขมากเกินไป",
+
+  // Archive, restore, delete
+  archive: "เลิกจำหน่าย",
+  restore: "นำกลับมาจำหน่าย",
+  archiveTitle: "เลิกจำหน่ายสินค้านี้หรือไม่?",
+  archiveBody:
+    "สินค้านี้จะไม่แสดงให้เลือกตอนขายหรือสั่งซื้ออีก แต่สต็อกและประวัติยังอยู่ครบ และนำกลับมาจำหน่ายได้ทุกเมื่อ",
+  restoreTitle: "นำสินค้านี้กลับมาจำหน่ายหรือไม่?",
+  restoreBody: "สินค้านี้จะกลับมาขายได้ตามปกติ",
+  archived: "เลิกจำหน่ายสินค้าแล้ว",
+  restored: "นำสินค้ากลับมาจำหน่ายแล้ว",
+  deleteTitle: "ลบสินค้านี้หรือไม่?",
+  deleteBody:
+    "การลบไม่สามารถย้อนกลับได้ สินค้าที่มีสต็อก รายการขาย หรือรายการสั่งซื้อจะลบไม่ได้ ทำได้เพียงเลิกจำหน่าย",
+  deleteBlocked:
+    "สินค้านี้มีสต็อก ประวัติการขาย หรือประวัติการสั่งซื้อ จึงลบไม่ได้ กรุณาใช้การเลิกจำหน่ายแทน",
+
+  // Categories
+  categories: "หมวดหมู่",
+  manageCategories: "จัดการหมวดหมู่",
+  manageCategoriesHint: "จัดกลุ่มสินค้าเพื่อให้ค้นหาได้ง่ายขึ้น",
+  categoryName: "ชื่อหมวดหมู่",
+  newCategoryPlaceholder: "ชื่อหมวดหมู่ใหม่",
+  noCategories: "ยังไม่มีหมวดหมู่",
+  categoryProductCount: "สินค้า {count} รายการ",
+  categoryExists: "มีหมวดหมู่ชื่อนี้อยู่แล้ว",
+  renameCategory: "เปลี่ยนชื่อ",
+  deleteCategoryTitle: "ลบหมวดหมู่นี้หรือไม่?",
+  deleteCategoryBody: "สินค้าในหมวดหมู่นี้จะยังอยู่ แต่จะกลายเป็นสินค้าที่ไม่มีหมวดหมู่",
+};
+
+export default products;
