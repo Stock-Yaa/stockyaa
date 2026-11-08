@@ -47,6 +47,9 @@ const sales: typeof en = {
   refunded: "คืนเงินและนำสินค้ากลับเข้าสต็อกเรียบร้อยแล้ว",
   refundedOn: "คืนเงินเมื่อ {date}",
   alreadyRefunded: "รายการขายนี้คืนเงินไปแล้ว",
+  refundBodyCash: "คืนเงินสดจาก {drawer} และสินค้าทุกรายการจะกลับเข้าสต็อก",
+  refundNeedsDrawer: "เปิดลิ้นชักเก็บเงินของเครื่องนี้ก่อนคืนเงินบิลเงินสด",
+  priceLevel: "ระดับราคา",
 };
 
 export default sales;

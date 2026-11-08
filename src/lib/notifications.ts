@@ -1,4 +1,4 @@
-import { and, count, eq, inArray, isNotNull, isNull, lt, or, sql, type SQL } from "drizzle-orm";
+import { and, count, eq, inArray, isNotNull, isNull, lt, notInArray, or, sql, type SQL } from "drizzle-orm";
 import type { DbOrTx } from "@/db";
 import {
   batches as batchesTable,
@@ -36,6 +36,8 @@ const KEEP_READ_DAYS = 90;
 /** Types that concern the whole pharmacy rather than one branch. */
 export const PHARMACY_WIDE_TYPES: NotificationType[] = ["subscription_ended", "subscription_ending"];
 const STOCK_TYPES: NotificationType[] = ["out_of_stock", "low_stock", "expired", "expiring"];
+/** Types only admins see; created by the code that raises them, not by the scan. */
+const MANAGER_TYPES: NotificationType[] = ["cash_review"];
 
 type NewNotification = typeof notifications.$inferInsert;
 
@@ -178,6 +180,8 @@ export function visibleNotifications({ user, pharmacy, branch }: NotificationVie
   if (canSwitchBranch(user)) return mine;
   return and(
     mine,
+    // Cash drawer reviews are for managers.
+    notInArray(notifications.type, MANAGER_TYPES),
     or(
       eq(notifications.branchId, branch.id),
       // Only subscription types: a stock alert without a branch predates

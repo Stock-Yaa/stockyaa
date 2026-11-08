@@ -7,6 +7,9 @@
 # local embedded database
 /.pglite/
 
+# receipt photos stored locally when Supabase Storage is not configured
+/.uploads/
+
 # build output and dependencies, rebuilt by Vercel
 /node_modules
 /.next/

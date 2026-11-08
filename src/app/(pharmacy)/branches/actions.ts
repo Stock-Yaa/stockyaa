@@ -12,6 +12,7 @@ import { canSwitchBranch } from "@/lib/active-branch";
 import { requirePharmacy } from "@/lib/auth";
 import { branchLimit, limitReachedKey } from "@/lib/branches";
 import { isUniqueViolation } from "@/lib/db-error";
+import { buyerBranchField } from "@/lib/tax-invoice";
 import { formToObject, optionalId, optionalText, requiredId, requiredText } from "@/lib/validation";
 
 /** Why a branch change was refused, or null when it went through. */
@@ -22,6 +23,7 @@ const branchSchema = z.object({
   name: requiredText(100),
   address: optionalText(),
   phone: optionalText(50),
+  taxBranchCode: buyerBranchField,
 });
 
 /**

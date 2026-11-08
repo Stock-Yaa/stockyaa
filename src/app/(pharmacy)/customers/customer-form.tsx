@@ -3,11 +3,13 @@
 import { Pencil, Plus } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Textarea } from "@/components/ui/form";
+import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { useFormAction } from "@/components/ui/use-form-action";
 import type { Customer } from "@/db/schema";
 import { useT } from "@/i18n/client";
+import { PRICE_LEVEL_LABEL } from "@/lib/price-labels";
+import { PRICE_LEVEL_OPTIONS } from "@/lib/pricing";
 import { saveCustomer } from "./actions";
 
 /** "Add customer" button, or a pencil icon when editing, plus the form dialog. */
@@ -53,11 +55,49 @@ export function CustomerFormButton({ customer }: { customer?: Customer }) {
           >
             <Input id="name" name="name" defaultValue={customer?.name} required autoFocus />
           </Field>
+          <Field
+            label={t("customers.priceLevel")}
+            htmlFor="priceLevel"
+            error={errors.priceLevel}
+            hint={t("customers.priceLevelHint")}
+            className="sm:col-span-2"
+          >
+            <Select id="priceLevel" name="priceLevel" defaultValue={customer?.priceLevel ?? "regular"}>
+              {PRICE_LEVEL_OPTIONS.map((level) => (
+                <option key={level} value={level}>
+                  {t(PRICE_LEVEL_LABEL[level])}
+                </option>
+              ))}
+            </Select>
+          </Field>
           <Field label={t("common.phone")} htmlFor="phone" error={errors.phone}>
             <Input id="phone" name="phone" type="tel" defaultValue={customer?.phone ?? ""} />
           </Field>
           <Field label={t("common.email")} htmlFor="email" error={errors.email}>
             <Input id="email" name="email" type="email" defaultValue={customer?.email ?? ""} />
+          </Field>
+          <Field
+            label={t("taxReceipt.customerTaxId")}
+            htmlFor="taxId"
+            error={errors.taxId}
+            hint={t("taxReceipt.customerTaxIdHint")}
+          >
+            <Input id="taxId" name="taxId" inputMode="numeric" maxLength={17} defaultValue={customer?.taxId ?? ""} />
+          </Field>
+          <Field
+            label={t("taxReceipt.buyerBranch")}
+            htmlFor="taxBranch"
+            error={errors.taxBranch}
+            hint={t("taxReceipt.customerBranchHint")}
+          >
+            <Input
+              id="taxBranch"
+              name="taxBranch"
+              inputMode="numeric"
+              maxLength={5}
+              placeholder="00000"
+              defaultValue={customer?.taxBranch ?? ""}
+            />
           </Field>
           <Field
             label={t("common.address")}

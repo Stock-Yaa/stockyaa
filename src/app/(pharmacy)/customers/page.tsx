@@ -2,7 +2,8 @@ import { and, asc, count, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { Trash2, Users } from "lucide-react";
 import Link from "next/link";
 import { ConfirmButton } from "@/components/ui/confirm-button";
-import { Pagination, SearchInput } from "@/components/ui/list-controls";
+import { Badge } from "@/components/ui/card";
+import { FilterSelect, Pagination, SearchInput } from "@/components/ui/list-controls";
 import { EmptyState, PageHeader, Toolbar } from "@/components/ui/page";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/table";
 import { getDb } from "@/db";
@@ -11,6 +12,8 @@ import { getT } from "@/i18n/server";
 import { requirePharmacy } from "@/lib/auth";
 import { getFormat } from "@/lib/format-server";
 import { pageTitle } from "@/lib/metadata";
+import { PRICE_LEVEL_LABEL, PRICE_LEVEL_TONE } from "@/lib/price-labels";
+import { PRICE_LEVEL_OPTIONS, isPriceLevel } from "@/lib/pricing";
 import { PAGE_SIZE, likePattern, pageCountOf, parsePage } from "@/lib/pagination";
 import { deleteCustomer } from "./actions";
 import { CustomerFormButton } from "./customer-form";
@@ -20,12 +23,13 @@ export const generateMetadata = pageTitle("customers.title");
 export default async function CustomersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; page?: string }>;
+  searchParams: Promise<{ q?: string; page?: string; level?: string }>;
 }) {
   const { pharmacy } = await requirePharmacy();
   const t = await getT();
   const f = await getFormat(pharmacy);
-  const { q, page: pageParam } = await searchParams;
+  const { q, page: pageParam, level: levelParam } = await searchParams;
+  const level = isPriceLevel(levelParam) ? levelParam : null;
   const page = parsePage(pageParam);
   const db = await getDb();
 
@@ -39,6 +43,7 @@ export default async function CustomersPage({
           ilike(customers.email, pattern),
         )
       : undefined,
+    level ? eq(customers.priceLevel, level) : undefined,
   );
 
   const [[{ total }], rows] = await Promise.all([
@@ -85,13 +90,21 @@ export default async function CustomersPage({
 
       <Toolbar>
         <SearchInput placeholder={t("customers.searchPlaceholder")} />
+        <FilterSelect
+          param="level"
+          aria-label={t("customers.priceLevel")}
+          options={[
+            { value: "", label: t("customers.allLevels") },
+            ...PRICE_LEVEL_OPTIONS.map((l) => ({ value: l, label: t(PRICE_LEVEL_LABEL[l]) })),
+          ]}
+        />
       </Toolbar>
 
       {rows.length === 0 ? (
         <EmptyState
           icon={Users}
-          title={q ? t("common.noResults") : t("customers.empty")}
-          hint={q ? t("common.noResultsHint") : t("customers.emptyHint")}
+          title={q || level ? t("common.noResults") : t("customers.empty")}
+          hint={q || level ? t("common.noResultsHint") : t("customers.emptyHint")}
         />
       ) : (
         <>
@@ -118,6 +131,11 @@ export default async function CustomersPage({
                       >
                         {customer.name}
                       </Link>
+                      {customer.priceLevel !== "regular" && (
+                        <Badge tone={PRICE_LEVEL_TONE[customer.priceLevel]} className="ml-2">
+                          {t(PRICE_LEVEL_LABEL[customer.priceLevel])}
+                        </Badge>
+                      )}
                     </TD>
                     <TD>{customer.phone ?? "—"}</TD>
                     <TD>{customer.email ?? "—"}</TD>

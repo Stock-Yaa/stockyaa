@@ -1,16 +1,18 @@
 "use server";
 
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, asc, eq, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getDb } from "@/db";
-import { batches, categories, products, purchaseItems, saleItems } from "@/db/schema";
+import { batches, categories, productImages, products, purchaseItems, saleItems } from "@/db/schema";
 import type { MessageKey } from "@/i18n/messages";
 import { getT } from "@/i18n/server";
 import { fieldErrorsFrom, type ActionState } from "@/lib/action";
 import { branchChanged } from "@/lib/active-branch";
 import { requirePharmacy } from "@/lib/auth";
+import { MAX_PRODUCT_PHOTOS } from "@/lib/product-images";
 import { productSchema } from "@/lib/product-input";
+import { StorageNotConfiguredError, deleteFile, putFile } from "@/lib/storage";
 import { addBatch } from "@/lib/stock";
 import { formToObject, optionalId, requiredId, requiredText } from "@/lib/validation";
 import { isForeignKeyViolation, isUniqueViolation } from "@/lib/db-error";
@@ -59,6 +61,7 @@ export async function saveProduct(formData: FormData): Promise<ActionState> {
     }
   }
 
+  let productId = id;
   if (id) {
     const updated = await db
       .update(products)
@@ -67,7 +70,7 @@ export async function saveProduct(formData: FormData): Promise<ActionState> {
       .returning({ id: products.id });
     if (updated.length === 0) return { ok: false, message: t("common.notFound") };
   } else {
-    await db.transaction(async (tx) => {
+    productId = await db.transaction(async (tx) => {
       const [product] = await tx
         .insert(products)
         .values({ ...values, pharmacyId: pharmacy.id })
@@ -85,11 +88,12 @@ export async function saveProduct(formData: FormData): Promise<ActionState> {
           userId: user.id,
         });
       }
+      return product.id;
     });
   }
 
   revalidateProductPages();
-  return { ok: true, message: t(id ? "common.updated" : "common.created") };
+  return { ok: true, message: t(id ? "common.updated" : "common.created"), id: productId ?? undefined };
 }
 
 /** Archives (`isActive` false) or restores a product. */
@@ -124,6 +128,8 @@ export async function deleteProduct(id: string): Promise<ActionState> {
   const db = await getDb();
 
   let outcome: "deleted" | "notFound" | "inUse";
+  // Its photo files go once the product row (and with it their rows) is gone.
+  let photoPaths: string[] = [];
   try {
     outcome = await db.transaction(async (tx) => {
       // Lock the row so stock or sales cannot be added to it while we check.
@@ -153,6 +159,12 @@ export async function deleteProduct(id: string): Promise<ActionState> {
         .limit(1);
       if (batch || saleItem || purchaseItem) return "inUse";
 
+      photoPaths = (
+        await tx
+          .select({ path: productImages.path })
+          .from(productImages)
+          .where(and(eq(productImages.productId, productId), eq(productImages.pharmacyId, pharmacy.id)))
+      ).map((p) => p.path);
       await tx
         .delete(products)
         .where(and(eq(products.id, productId), eq(products.pharmacyId, pharmacy.id)));
@@ -166,8 +178,137 @@ export async function deleteProduct(id: string): Promise<ActionState> {
 
   if (outcome === "notFound") return { ok: false, message: t("common.notFound") };
   if (outcome === "inUse") return { ok: false, message: t("products.deleteBlocked") };
+  await removeFiles(photoPaths);
   revalidateProductPages();
   return { ok: true, message: t("common.deleted") };
+}
+
+/** Deletes stored files; a failure only leaves an unused file behind. */
+async function removeFiles(paths: string[]) {
+  for (const path of paths) {
+    try {
+      await deleteFile(path);
+    } catch (error) {
+      console.error("Could not delete", path, error);
+    }
+  }
+}
+
+// Photos are shrunk in the browser first; this is the most the server takes.
+const MAX_PHOTO_BYTES = 1_500_000;
+const PHOTO_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+
+/**
+ * Adds a photo to a product. The first photo becomes its main photo. Files
+ * are stored under the pharmacy's own folder.
+ */
+export async function uploadProductPhoto(formData: FormData): Promise<ActionState> {
+  const { pharmacy } = await requirePharmacy();
+  const t = await getT();
+  const productId = requiredId.safeParse(formData.get("productId"));
+  if (!productId.success) return { ok: false, message: t("common.notFound") };
+  const photo = formData.get("photo");
+  if (!(photo instanceof File) || photo.size === 0) return { ok: false, message: t("products.photoMissing") };
+  const extension = PHOTO_TYPES[photo.type];
+  if (!extension || photo.size > MAX_PHOTO_BYTES) return { ok: false, message: t("products.photoInvalid") };
+
+  const db = await getDb();
+  const [product] = await db
+    .select({ id: products.id })
+    .from(products)
+    .where(and(eq(products.id, productId.data), eq(products.pharmacyId, pharmacy.id)))
+    .limit(1);
+  if (!product) return { ok: false, message: t("common.notFound") };
+  const existing = await db.$count(
+    productImages,
+    and(eq(productImages.productId, product.id), eq(productImages.pharmacyId, pharmacy.id)),
+  );
+  if (existing >= MAX_PRODUCT_PHOTOS) {
+    return { ok: false, message: t("products.photoLimit", { count: MAX_PRODUCT_PHOTOS }) };
+  }
+
+  const path = `${pharmacy.id}/products/${product.id}/${crypto.randomUUID()}.${extension}`;
+  try {
+    await putFile(path, new Uint8Array(await photo.arrayBuffer()), photo.type);
+  } catch (error) {
+    if (error instanceof StorageNotConfiguredError) return { ok: false, message: t("cashDrawer.storageMissing") };
+    console.error(error);
+    return { ok: false, message: t("products.photoUploadFailed") };
+  }
+  await db.transaction(async (tx) => {
+    // Lock the product so two uploads cannot both become the main photo.
+    await tx.select({ id: products.id }).from(products).where(eq(products.id, product.id)).for("update");
+    const main = await tx.$count(
+      productImages,
+      and(eq(productImages.productId, product.id), eq(productImages.isMain, true)),
+    );
+    await tx
+      .insert(productImages)
+      .values({ pharmacyId: pharmacy.id, productId: product.id, path, isMain: main === 0 });
+  });
+  revalidateProductPages();
+  revalidatePath("/pos");
+  return { ok: true, message: t("products.photoAdded") };
+}
+
+/** Makes one of a product's photos its main photo. */
+export async function setMainPhoto(imageId: string): Promise<ActionState> {
+  const { pharmacy } = await requirePharmacy();
+  const t = await getT();
+  if (!requiredId.safeParse(imageId).success) return { ok: false, message: t("common.notFound") };
+  const db = await getDb();
+  const done = await db.transaction(async (tx) => {
+    const [image] = await tx
+      .select({ productId: productImages.productId })
+      .from(productImages)
+      .where(and(eq(productImages.id, imageId), eq(productImages.pharmacyId, pharmacy.id)));
+    if (!image) return false;
+    await tx.select({ id: products.id }).from(products).where(eq(products.id, image.productId)).for("update");
+    // Clear the old main photo first: at most one may be main at any moment.
+    await tx
+      .update(productImages)
+      .set({ isMain: false })
+      .where(and(eq(productImages.productId, image.productId), eq(productImages.pharmacyId, pharmacy.id)));
+    await tx
+      .update(productImages)
+      .set({ isMain: true })
+      .where(and(eq(productImages.id, imageId), eq(productImages.pharmacyId, pharmacy.id)));
+    return true;
+  });
+  if (!done) return { ok: false, message: t("common.notFound") };
+  revalidateProductPages();
+  revalidatePath("/pos");
+  return { ok: true, message: t("products.mainPhotoSet") };
+}
+
+/** Deletes a photo; when it was the main photo, the next oldest takes its place. */
+export async function deletePhoto(imageId: string): Promise<ActionState> {
+  const { pharmacy } = await requirePharmacy();
+  const t = await getT();
+  if (!requiredId.safeParse(imageId).success) return { ok: false, message: t("common.notFound") };
+  const db = await getDb();
+  const removed = await db.transaction(async (tx) => {
+    const [image] = await tx
+      .delete(productImages)
+      .where(and(eq(productImages.id, imageId), eq(productImages.pharmacyId, pharmacy.id)))
+      .returning({ productId: productImages.productId, path: productImages.path, isMain: productImages.isMain });
+    if (!image) return null;
+    if (image.isMain) {
+      const [next] = await tx
+        .select({ id: productImages.id })
+        .from(productImages)
+        .where(and(eq(productImages.productId, image.productId), eq(productImages.pharmacyId, pharmacy.id)))
+        .orderBy(asc(productImages.createdAt))
+        .limit(1);
+      if (next) await tx.update(productImages).set({ isMain: true }).where(eq(productImages.id, next.id));
+    }
+    return image.path;
+  });
+  if (!removed) return { ok: false, message: t("common.notFound") };
+  await removeFiles([removed]);
+  revalidateProductPages();
+  revalidatePath("/pos");
+  return { ok: true, message: t("products.photoDeleted") };
 }
 
 const categorySchema = z.object({

@@ -1,4 +1,4 @@
-import { and, asc, eq, ne } from "drizzle-orm";
+import { and, asc, eq, ne, sql } from "drizzle-orm";
 import { Power, PowerOff } from "lucide-react";
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/card";
@@ -14,7 +14,7 @@ import { listBranches, planLimits } from "@/lib/branches";
 import { getFormat } from "@/lib/format-server";
 import { pageTitle } from "@/lib/metadata";
 import { setUserActive } from "./actions";
-import { ResetPasswordButton, UserFormButton } from "./user-forms";
+import { ResetPasswordButton, SetPinButton, UserFormButton } from "./user-forms";
 
 export const generateMetadata = pageTitle("users.title");
 
@@ -35,6 +35,8 @@ export default async function UsersPage() {
         branchId: users.branchId,
         isActive: users.isActive,
         lastLoginAt: users.lastLoginAt,
+        // Whether a PIN is set, never the hash itself.
+        hasPin: sql<boolean>`${users.pinHash} is not null`,
       })
       .from(users)
       .where(and(eq(users.pharmacyId, pharmacy.id), ne(users.role, "superadmin")))
@@ -63,6 +65,7 @@ export default async function UsersPage() {
             <TH>{t("users.role")}</TH>
             <TH>{t("users.branch")}</TH>
             <TH>{t("common.status")}</TH>
+            <TH>{t("users.pin")}</TH>
             <TH>{t("users.lastSignIn")}</TH>
             <TH className="text-right">{t("common.actions")}</TH>
           </tr>
@@ -96,6 +99,13 @@ export default async function UsersPage() {
                     {row.isActive ? t("common.active") : t("common.inactive")}
                   </Badge>
                 </TD>
+                <TD>
+                  {row.hasPin ? (
+                    <Badge tone="success">{t("users.pinSet")}</Badge>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">{t("users.pinNotSet")}</span>
+                  )}
+                </TD>
                 <TD className="whitespace-nowrap">
                   {row.lastLoginAt ? (
                     f.dateTime(row.lastLoginAt)
@@ -112,6 +122,7 @@ export default async function UsersPage() {
                       isSelf={isSelf}
                       canAddAdmin={canAddAdmin || (role === "admin" && row.isActive)}
                     />
+                    <SetPinButton user={row} />
                     {!isSelf && <ResetPasswordButton user={row} />}
                     {!isSelf &&
                       (row.isActive ? (

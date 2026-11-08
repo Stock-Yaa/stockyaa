@@ -1,6 +1,7 @@
 "use client";
 
 import { Pencil, Plus } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { usePharmacy } from "@/components/pharmacy-context";
 import { Button } from "@/components/ui/button";
@@ -9,7 +10,9 @@ import { Modal, ModalFooter } from "@/components/ui/modal";
 import { useFormAction } from "@/components/ui/use-form-action";
 import type { Product } from "@/db/schema";
 import { useT } from "@/i18n/client";
+import type { PhotoRef } from "@/lib/product-images-client";
 import { saveProduct } from "./actions";
+import { ProductPhotos, uploadPhotos, type QueuedPhoto } from "./product-photos";
 
 export type CategoryOption = { id: string; name: string };
 
@@ -17,15 +20,37 @@ export type CategoryOption = { id: string; name: string };
 export function ProductFormButton({
   product,
   categories,
+  photos = [],
 }: {
   product?: Product;
   categories: CategoryOption[];
+  /** The saved product's photos, main first. */
+  photos?: PhotoRef[];
 }) {
   const t = useT();
+  const router = useRouter();
   const { currency, branch } = usePharmacy();
   const [open, setOpen] = useState(false);
+  // Photos picked for a new product, uploaded once it has been created.
+  const [queued, setQueued] = useState<QueuedPhoto[]>([]);
+  const [uploading, setUploading] = useState(false);
+
+  function close() {
+    queued.forEach((q) => URL.revokeObjectURL(q.url));
+    setQueued([]);
+    setOpen(false);
+  }
+
   const { onSubmit, pending, errors } = useFormAction(saveProduct, {
-    onSuccess: () => setOpen(false),
+    onSuccess: async (result) => {
+      if (!product && result.id && queued.length > 0) {
+        setUploading(true);
+        await uploadPhotos(result.id, queued.map((q) => q.file));
+        setUploading(false);
+        router.refresh();
+      }
+      close();
+    },
   });
 
   return (
@@ -48,12 +73,18 @@ export function ProductFormButton({
 
       <Modal
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={close}
         title={product ? t("products.edit") : t("products.add")}
         size="lg"
       >
         <form onSubmit={onSubmit} className="grid gap-4 sm:grid-cols-2">
           {product && <input type="hidden" name="id" value={product.id} />}
+          <ProductPhotos
+            productId={product?.id ?? null}
+            photos={photos}
+            queued={queued}
+            onQueue={setQueued}
+          />
           <Field
             label={t("common.name")}
             htmlFor="name"
@@ -137,6 +168,38 @@ export function ProductFormButton({
               step="0.01"
               defaultValue={product?.salePrice}
               required
+            />
+          </Field>
+          <Field
+            label={t("products.memberPriceWithCurrency", { currency })}
+            htmlFor="memberPrice"
+            error={errors.memberPrice}
+            hint={t("products.levelPriceHint")}
+          >
+            <Input
+              id="memberPrice"
+              name="memberPrice"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step="0.01"
+              defaultValue={product?.memberPrice ?? ""}
+            />
+          </Field>
+          <Field
+            label={t("products.staffPriceWithCurrency", { currency })}
+            htmlFor="staffPrice"
+            error={errors.staffPrice}
+            hint={t("products.levelPriceHint")}
+          >
+            <Input
+              id="staffPrice"
+              name="staffPrice"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step="0.01"
+              defaultValue={product?.staffPrice ?? ""}
             />
           </Field>
           <Field
@@ -232,11 +295,11 @@ export function ProductFormButton({
 
           <div className="sm:col-span-2">
             <ModalFooter>
-              <Button variant="outline" onClick={() => setOpen(false)} disabled={pending}>
+              <Button variant="outline" onClick={close} disabled={pending || uploading}>
                 {t("common.cancel")}
               </Button>
-              <Button type="submit" disabled={pending}>
-                {pending ? t("common.saving") : t("common.save")}
+              <Button type="submit" disabled={pending || uploading}>
+                {uploading ? t("products.uploading") : pending ? t("common.saving") : t("common.save")}
               </Button>
             </ModalFooter>
           </div>

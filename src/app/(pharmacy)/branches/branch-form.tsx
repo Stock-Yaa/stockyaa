@@ -77,6 +77,22 @@ export function BranchFormButton({
           <Field label={t("common.address")} htmlFor="branch-address" error={errors.address}>
             <Textarea id="branch-address" name="address" defaultValue={branch?.address ?? ""} />
           </Field>
+          <Field
+            label={t("taxReceipt.sellerBranchCode")}
+            htmlFor="branch-tax-code"
+            error={errors.taxBranchCode}
+            hint={t("taxReceipt.sellerBranchCodeHint")}
+          >
+            <Input
+              id="branch-tax-code"
+              name="taxBranchCode"
+              inputMode="numeric"
+              maxLength={5}
+              placeholder="00000"
+              defaultValue={branch?.taxBranchCode ?? ""}
+              className="tabular-nums"
+            />
+          </Field>
           <ModalFooter>
             <Button variant="outline" onClick={() => setOpen(false)} disabled={pending}>
               {t("common.cancel")}

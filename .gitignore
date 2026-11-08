@@ -43,3 +43,6 @@ next-env.d.ts
 
 # local embedded database
 /.pglite/
+
+# receipt photos stored locally when Supabase Storage is not configured
+/.uploads/

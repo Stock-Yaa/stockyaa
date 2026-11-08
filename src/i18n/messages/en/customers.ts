@@ -50,6 +50,12 @@ const customers = {
   tierBronze: "Bronze",
   insightsEmpty: "No customer purchases yet",
   insightsEmptyHint: "Choose a customer at the point of sale and their purchases will show up here.",
+  priceLevel: "Price level",
+  priceLevelHint: "Which selling price this customer pays at the POS. Add staff as customers with the Staff level.",
+  allLevels: "All price levels",
+  levelRegular: "Regular",
+  levelMember: "Member",
+  levelStaff: "Staff",
 };
 
 export default customers;

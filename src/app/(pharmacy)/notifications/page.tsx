@@ -25,6 +25,7 @@ const PER_PAGE = 30;
 
 const URGENCY_ORDER: NotificationType[] = [
   "subscription_ended",
+  "cash_review",
   "out_of_stock",
   "expired",
   "low_stock",
@@ -67,6 +68,19 @@ const TEXT: Record<NotificationType, { title: MessageKey; body: MessageKey; href
     body: "notifications.subscriptionEndingBody",
     href: "/subscription",
   },
+  // The body depends on the kind of review (see CASH_REVIEW_BODY).
+  cash_review: {
+    title: "notifications.cashReviewTitle",
+    body: "notifications.cashVarianceBody",
+    href: "/cash-drawer?tab=review",
+  },
+};
+
+const CASH_REVIEW_BODY: Record<string, MessageKey> = {
+  variance: "notifications.cashVarianceBody",
+  variance_blocked: "notifications.cashVarianceBlockedBody",
+  opening: "notifications.cashOpeningBody",
+  payout: "notifications.cashPayoutBody",
 };
 
 /** Title and body in the reader's language, from the stored figures. */
@@ -86,6 +100,17 @@ function describe(n: Notification, t: Translate, f: Format) {
           : "",
   };
   const text = TEXT[n.type];
+  if (n.type === "cash_review") {
+    const amount = Number(d.amount ?? 0);
+    const cash = {
+      drawer: String(d.drawer ?? ""),
+      staff: String(d.staff ?? ""),
+      // A difference is signed (short or over); a pay-out amount is not.
+      amount: d.kind === "payout" ? f.money(amount) : `${amount > 0 ? "+" : ""}${f.money(amount)}`,
+    };
+    const kind = d.kind === "variance" && d.blocking === 1 ? "variance_blocked" : String(d.kind);
+    return { title: t(text.title), body: t(CASH_REVIEW_BODY[kind] ?? text.body, cash), href: text.href };
+  }
   return { title: t(text.title, vars), body: t(text.body, vars), href: text.href };
 }
 

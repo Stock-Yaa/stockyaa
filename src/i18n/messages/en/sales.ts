@@ -45,6 +45,9 @@ const sales = {
   refunded: "Sale refunded and stock returned",
   refundedOn: "Refunded on {date}",
   alreadyRefunded: "This sale has already been refunded.",
+  refundBodyCash: "The cash is paid back from {drawer} and every item returns to stock.",
+  refundNeedsDrawer: "Open this till's cash drawer to refund a cash sale.",
+  priceLevel: "Price level",
 };
 
 export default sales;

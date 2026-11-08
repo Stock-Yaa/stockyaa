@@ -801,6 +801,12 @@ function QueueItem({
           inputMode: "decimal",
           required: true,
         })}
+        {input("memberPrice", t("products.memberPriceWithCurrency", { currency: f.currency }), {
+          inputMode: "decimal",
+        })}
+        {input("staffPrice", t("products.staffPriceWithCurrency", { currency: f.currency }), {
+          inputMode: "decimal",
+        })}
         {input("costPrice", t("products.costPriceWithCurrency", { currency: f.currency }), {
           inputMode: "decimal",
         })}

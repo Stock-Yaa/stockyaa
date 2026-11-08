@@ -52,6 +52,12 @@ const customers: typeof en = {
   tierBronze: "Bronze",
   insightsEmpty: "ยังไม่มีลูกค้าที่ซื้อสินค้า",
   insightsEmptyHint: "เมื่อเลือกลูกค้าตอนขายหน้าร้าน การซื้อของลูกค้าจะแสดงที่นี่",
+  priceLevel: "ระดับราคา",
+  priceLevelHint: "ราคาขายที่ลูกค้ารายนี้จ่ายที่หน้าร้าน เพิ่มพนักงานเป็นลูกค้าระดับพนักงานเพื่อใช้ราคาพนักงาน",
+  allLevels: "ทุกระดับราคา",
+  levelRegular: "ทั่วไป",
+  levelMember: "สมาชิก",
+  levelStaff: "พนักงาน",
 };
 
 export default customers;

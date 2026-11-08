@@ -4,14 +4,26 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getDb } from "@/db";
-import { PAYMENT_METHODS, customers, products, refillReminders, saleItems, sales } from "@/db/schema";
+import {
+  PAYMENT_METHODS,
+  customers,
+  products,
+  refillReminders,
+  saleItems,
+  sales,
+  type PriceLevel,
+} from "@/db/schema";
 import type { MessageKey } from "@/i18n/messages";
 import { getT } from "@/i18n/server";
 import { requirePharmacy } from "@/lib/auth";
+import { lockShiftForCash } from "@/lib/cash-drawer";
 import { todayInTimezone } from "@/lib/dates";
+import { priceFor } from "@/lib/pricing";
+import { buyerSchema, issueTaxInvoice, type BuyerInput } from "@/lib/tax-invoice";
 import { InsufficientStockError, deductStockFefo, nextInvoiceNumber } from "@/lib/stock";
 import { round2 } from "@/lib/utils";
 import { nonNegativeNumber, optionalId, positiveInt, requiredId, requiredText } from "@/lib/validation";
+import type { PosCustomer } from "./customer-picker";
 import { computeSaleTotals, type SalePayload } from "./totals";
 
 // Largest value the money columns (numeric(12, 2)) can hold.
@@ -28,10 +40,22 @@ const saleSchema = z.object({
   discount: money,
   paymentMethod: z.enum(PAYMENT_METHODS),
   amountPaid: money,
+  shiftId: optionalId,
 });
 
+/** The drawer session given for a cash sale is not open (or is being counted). */
+class DrawerNotOpenError extends Error {}
+
 export type CreateSaleResult =
-  | { ok: true; saleId: string; invoiceNumber: string; total: number; changeDue: number }
+  | {
+      ok: true;
+      saleId: string;
+      invoiceNumber: string;
+      total: number;
+      changeDue: number;
+      /** Set when a full tax receipt was issued with the sale. */
+      taxInvoiceNumber: string | null;
+    }
   | { ok: false; message: string };
 
 /**
@@ -59,7 +83,13 @@ export async function createSale(payload: SalePayload): Promise<CreateSaleResult
 
   const db = await getDb();
   const productRows = await db
-    .select({ id: products.id, name: products.name, salePrice: products.salePrice })
+    .select({
+      id: products.id,
+      name: products.name,
+      salePrice: products.salePrice,
+      memberPrice: products.memberPrice,
+      staffPrice: products.staffPrice,
+    })
     .from(products)
     .where(
       and(
@@ -73,19 +103,22 @@ export async function createSale(payload: SalePayload): Promise<CreateSaleResult
   }
   const productById = new Map(productRows.map((p) => [p.id, p]));
 
+  // The customer's price level decides what every item costs; walk-ins pay the regular price.
+  let priceLevel: PriceLevel = "regular";
   if (input.customerId) {
     const [customer] = await db
-      .select({ id: customers.id })
+      .select({ id: customers.id, priceLevel: customers.priceLevel })
       .from(customers)
       .where(and(eq(customers.id, input.customerId), eq(customers.pharmacyId, pharmacy.id)))
       .limit(1);
     if (!customer) return { ok: false, message: t("pos.customerNotFound") };
+    priceLevel = customer.priceLevel;
   }
 
   // Cart order, so receipts list items the way they were rung up.
   const lines = [...quantities].flatMap(([productId, quantity]) => {
     const product = productById.get(productId);
-    return product ? [{ product, quantity, unitPrice: product.salePrice }] : [];
+    return product ? [{ product, quantity, unitPrice: priceFor(product, priceLevel) }] : [];
   });
 
   const totals = computeSaleTotals(lines, input.discount, pharmacy.taxRate);
@@ -100,9 +133,25 @@ export async function createSale(payload: SalePayload): Promise<CreateSaleResult
   const changeDue = round2(amountPaid - totals.total);
   const today = todayInTimezone(pharmacy.timezone);
 
+  // A full tax receipt is issued with the sale when the customer asked for one.
+  let taxBuyer: BuyerInput | null = null;
+  if (payload.taxBuyer) {
+    const buyer = buyerSchema.safeParse({ ...payload.taxBuyer, customerId: input.customerId });
+    if (!buyer.success) return { ok: false, message: t("pos.taxBuyerInvalid") };
+    taxBuyer = buyer.data;
+  }
+
+  if (input.paymentMethod === "cash" && !input.shiftId) {
+    return { ok: false, message: t("pos.drawerClosed") };
+  }
+
   try {
     const sale = await db.transaction(async (tx) => {
-      const invoiceNumber = await nextInvoiceNumber(tx, pharmacy.id);
+      // The till's drawer session, locked so it cannot close while the sale
+      // is written. Cash needs one; card and transfer are linked when there is one.
+      const shift = input.shiftId ? await lockShiftForCash(tx, branch, input.shiftId) : null;
+      if (input.paymentMethod === "cash" && !shift) throw new DrawerNotOpenError();
+      const invoiceNumber = await nextInvoiceNumber(tx, pharmacy.id, today);
       const [created] = await tx
         .insert(sales)
         .values({
@@ -116,8 +165,10 @@ export async function createSale(payload: SalePayload): Promise<CreateSaleResult
           tax: totals.tax,
           total: totals.total,
           paymentMethod: input.paymentMethod,
+          priceLevel,
           amountPaid,
           changeDue,
+          shiftId: shift?.id ?? null,
         })
         .returning({ id: sales.id });
 
@@ -165,11 +216,22 @@ export async function createSale(payload: SalePayload): Promise<CreateSaleResult
             ),
           );
       }
-      return { id: created.id, invoiceNumber };
+      const tax = taxBuyer
+        ? await issueTaxInvoice(tx, {
+            pharmacyId: pharmacy.id,
+            branchId: branch.id,
+            saleId: created.id,
+            day: today,
+            userId: user.id,
+            buyer: taxBuyer,
+          })
+        : null;
+      return { id: created.id, invoiceNumber, taxInvoiceNumber: tax?.number ?? null };
     });
 
     revalidatePath("/pos");
     revalidatePath("/sales");
+    if (taxBuyer?.saveToCustomer) revalidatePath("/customers", "layout");
     revalidatePath("/customers/reminders");
     return {
       ok: true,
@@ -177,8 +239,14 @@ export async function createSale(payload: SalePayload): Promise<CreateSaleResult
       invoiceNumber: sale.invoiceNumber,
       total: totals.total,
       changeDue,
+      taxInvoiceNumber: sale.taxInvoiceNumber,
     };
   } catch (error) {
+    if (error instanceof DrawerNotOpenError) {
+      // Closed or being counted on another screen; nothing was sold.
+      revalidatePath("/pos");
+      return { ok: false, message: t("pos.drawerClosed") };
+    }
     if (error instanceof InsufficientStockError) {
       // Stock on screen was stale; the transaction rolled back, nothing was sold.
       revalidatePath("/pos");
@@ -197,7 +265,7 @@ export async function createSale(payload: SalePayload): Promise<CreateSaleResult
 const quickCustomerSchema = z.object({ name: requiredText() });
 
 export type CreateCustomerResult =
-  | { ok: true; customer: { id: string; name: string; phone: string | null } }
+  | { ok: true; customer: PosCustomer }
   | { ok: false; message: string };
 
 /** Adds a customer by name from the POS, so it can be attached to the sale at once. */
@@ -213,7 +281,15 @@ export async function createPosCustomer(name: string): Promise<CreateCustomerRes
   const [customer] = await db
     .insert(customers)
     .values({ pharmacyId: pharmacy.id, name: parsed.data.name })
-    .returning({ id: customers.id, name: customers.name, phone: customers.phone });
+    .returning({
+      id: customers.id,
+      name: customers.name,
+      phone: customers.phone,
+      priceLevel: customers.priceLevel,
+      taxId: customers.taxId,
+      taxBranch: customers.taxBranch,
+      address: customers.address,
+    });
 
   revalidatePath("/customers");
   return { ok: true, customer };

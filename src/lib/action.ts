@@ -8,6 +8,8 @@ export type ActionState = {
   ok: boolean;
   message?: string;
   fieldErrors?: Record<string, string>;
+  /** The id of a record the action created, when the form needs it next. */
+  id?: string;
 } | null;
 
 /** First error per field from a zod error, with messages passed through `translate`. */

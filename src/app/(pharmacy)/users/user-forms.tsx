@@ -1,13 +1,13 @@
 "use client";
 
-import { KeyRound, Pencil, UserPlus } from "lucide-react";
+import { Grid3x3, KeyRound, Pencil, UserPlus } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/form";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { useFormAction } from "@/components/ui/use-form-action";
 import { useT } from "@/i18n/client";
-import { resetPassword, saveUser } from "./actions";
+import { resetPassword, saveUser, setUserPin } from "./actions";
 
 export type UserRow = {
   id: string;
@@ -261,6 +261,64 @@ export function ResetPasswordButton({ user }: { user: { id: string; name: string
         size="sm"
       >
         <ResetPasswordForm userId={user.id} onDone={() => setOpen(false)} />
+      </Modal>
+    </>
+  );
+}
+
+function PinForm({ userId, onDone }: { userId: string; onDone: () => void }) {
+  const t = useT();
+  const { onSubmit, pending, errors } = useFormAction(setUserPin, { onSuccess: onDone });
+
+  return (
+    <form onSubmit={onSubmit} className="grid gap-4">
+      <input type="hidden" name="userId" value={userId} />
+      <Field label={t("users.newPin")} htmlFor="user-pin" error={errors.pin} hint={t("users.pinHint")} required>
+        <Input
+          id="user-pin"
+          name="pin"
+          type="password"
+          inputMode="numeric"
+          autoComplete="off"
+          pattern="[0-9]{4,6}"
+          minLength={4}
+          maxLength={6}
+          required
+          autoFocus
+          className="text-center text-xl tracking-[0.4em]"
+        />
+      </Field>
+      <ModalFooter>
+        <Button variant="outline" onClick={onDone} disabled={pending}>
+          {t("common.cancel")}
+        </Button>
+        <Button type="submit" disabled={pending}>
+          {pending ? t("common.saving") : t("users.savePin")}
+        </Button>
+      </ModalFooter>
+    </form>
+  );
+}
+
+/** Sets a user's cash drawer PIN (shown in the users table). */
+export function SetPinButton({ user }: { user: { id: string; name: string; hasPin: boolean } }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const label = user.hasPin ? t("users.changePin") : t("users.setPin");
+
+  return (
+    <>
+      <Button variant="ghost" size="icon" aria-label={label} title={label} onClick={() => setOpen(true)}>
+        <Grid3x3 />
+      </Button>
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title={label}
+        description={t("users.pinFor", { name: user.name })}
+        size="sm"
+      >
+        <PinForm userId={user.id} onDone={() => setOpen(false)} />
       </Modal>
     </>
   );

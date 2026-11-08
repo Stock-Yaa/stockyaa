@@ -13,6 +13,7 @@ import { canSwitchBranch } from "@/lib/active-branch";
 import { requirePharmacy } from "@/lib/auth";
 import { planLimits } from "@/lib/branches";
 import { isUniqueViolation } from "@/lib/db-error";
+import { hashPin, pinField } from "@/lib/pin";
 import {
   formToObject,
   optionalId,
@@ -223,6 +224,31 @@ export async function resetPassword(formData: FormData): Promise<ActionState> {
   if (updated.length === 0) return { ok: false, message: t("common.notFound") };
 
   return { ok: true, message: t("users.passwordReset") };
+}
+
+const pinSchema = z.object({ userId: requiredId, pin: pinField });
+
+/**
+ * Sets the cash drawer PIN of a user of the pharmacy (their own too), and
+ * lifts a lock from wrong tries.
+ */
+export async function setUserPin(formData: FormData): Promise<ActionState> {
+  const { user: me, pharmacy } = await requirePharmacy();
+  const t = await getT();
+  if (!canSwitchBranch(me)) return { ok: false, message: t("common.adminOnly") };
+  const parsed = pinSchema.safeParse(formToObject(formData));
+  if (!parsed.success) {
+    return { ok: false, fieldErrors: fieldErrorsFrom(parsed.error, (m) => t(m as MessageKey)) };
+  }
+  const db = await getDb();
+  const updated = await db
+    .update(users)
+    .set({ pinHash: await hashPin(parsed.data.pin), pinFailures: 0, pinLockedUntil: null })
+    .where(pharmacyUser(pharmacy.id, parsed.data.userId))
+    .returning({ id: users.id });
+  if (updated.length === 0) return { ok: false, message: t("common.notFound") };
+  revalidatePath("/users");
+  return { ok: true, message: t("users.pinSaved") };
 }
 
 const activeArgs = z.tuple([requiredId, z.boolean()]);

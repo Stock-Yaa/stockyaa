@@ -174,6 +174,9 @@ export async function seedDatabase(db: Db, options: SeedOptions): Promise<boolea
           barcode: `885000000${String(i + 1).padStart(4, "0")}`,
           unit,
           salePrice: sale,
+          // About 5% off for members; staff buy at cost plus 10%.
+          memberPrice: Math.floor(sale * 0.95),
+          staffPrice: Math.min(sale, Math.ceil(cost * 1.1)),
           costPrice: cost,
           reorderLevel: reorder,
           requiresPrescription: rx,
@@ -192,9 +195,10 @@ export async function seedDatabase(db: Db, options: SeedOptions): Promise<boolea
     const customerRows = await tx
       .insert(customers)
       .values([
-        { pharmacyId, name: "Somchai Jaidee", phone: "081-234-5678" },
+        { pharmacyId, name: "Somchai Jaidee", phone: "081-234-5678", priceLevel: "member" },
         { pharmacyId, name: "Suda Rakdee", phone: "089-876-5432" },
         { pharmacyId, name: "John Smith", phone: "062-111-2233", email: "john@example.com" },
+        { pharmacyId, name: "Nok Sriwan", phone: "086-555-1212", notes: "Pharmacy assistant", priceLevel: "staff" },
       ])
       .returning();
 
@@ -339,7 +343,7 @@ export async function seedDatabase(db: Db, options: SeedOptions): Promise<boolea
         // About a third of the sales happen in Silom.
         const branchId = random() < 0.35 ? silom.id : main.id;
         const subtotal = round2(lines.reduce((s, l) => s + l.quantity * l.product.salePrice, 0));
-        const invoiceNumber = await nextInvoiceNumber(tx, pharmacyId);
+        const invoiceNumber = await nextInvoiceNumber(tx, pharmacyId, today);
         const [sale] = await tx
           .insert(sales)
           .values({

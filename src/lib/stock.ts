@@ -2,6 +2,7 @@ import { and, asc, eq, gt, gte, isNull, or, sql } from "drizzle-orm";
 import type { DbOrTx, Tx } from "@/db";
 import { batches, pharmacies, stockMovements } from "@/db/schema";
 import { inScope, type BranchScope } from "./branches";
+import { nextDocumentNumber } from "./numbering";
 
 type MovementType = (typeof stockMovements.$inferInsert)["type"];
 
@@ -242,14 +243,9 @@ export async function changeBatchQuantity(
   return { ...batch, quantity: next };
 }
 
-/** Next invoice number for a pharmacy, e.g. INV-000123. Call inside a transaction. */
-export async function nextInvoiceNumber(tx: Tx, pharmacyId: string): Promise<string> {
-  const [row] = await tx
-    .update(pharmacies)
-    .set({ saleSeq: sql`${pharmacies.saleSeq} + 1` })
-    .where(eq(pharmacies.id, pharmacyId))
-    .returning({ seq: pharmacies.saleSeq });
-  return `INV-${String(row.seq).padStart(6, "0")}`;
+/** Next invoice number for a pharmacy, in its own format (see ./numbering). Call inside a transaction. */
+export function nextInvoiceNumber(tx: Tx, pharmacyId: string, day: string): Promise<string> {
+  return nextDocumentNumber(tx, pharmacyId, "sale", day);
 }
 
 /** Next purchase reference for a pharmacy, e.g. PO-000012. Call inside a transaction. */

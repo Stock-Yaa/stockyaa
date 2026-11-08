@@ -64,8 +64,8 @@ Demo accounts (local demo database only):
 
 ## Connect Supabase
 
-1. Create a Supabase project and copy its Postgres connection string (Project settings → Database → Connection string → URI; the pooled "transaction" string works).
-2. Copy `.env.example` to `.env.local` and fill in `DATABASE_URL`, `AUTH_SECRET`, and the super admin email and password. On a serverless host such as Vercel also set `DATABASE_POOL_MAX=1`.
+1. Create a Supabase project and copy its Postgres connection string (Project settings → Database → Connection string → URI). Use the **session pooler** (port 5432): with `DATABASE_POOL_MAX=1` the transaction pooler (port 6543) hangs on parallel queries.
+2. Copy `.env.example` to `.env.local` and fill in `DATABASE_URL`, `AUTH_SECRET`, and the super admin email and password. On a serverless host such as Vercel also set `DATABASE_POOL_MAX=1`. For receipt photos of cash drawer pay-outs, also set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` (Project settings → API keys); the private bucket is created on first upload.
 3. Create the tables, then the plans and super admin:
 
    ```bash
@@ -75,7 +75,7 @@ Demo accounts (local demo database only):
 
 4. Start the app. It now uses Supabase; the demo accounts above do not exist there, so sign in with the super admin you set in step 2.
 
-Supabase is used as a plain Postgres database. Sign-in, sessions and tenant isolation are handled by the app, so no Supabase Auth or row-level-security setup is needed.
+Supabase is used as a plain Postgres database and, for receipt photos, as private file storage reached with the service key from the server only. Sign-in, sessions and tenant isolation are handled by the app, so no Supabase Auth or row-level-security setup is needed.
 
 ## Tech
 

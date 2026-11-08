@@ -193,6 +193,8 @@ export async function importProducts(items: unknown, branchId: unknown): Promise
           barcode: row.barcode,
           unit: row.unit ?? "pcs",
           salePrice: row.salePrice,
+          memberPrice: row.memberPrice,
+          staffPrice: row.staffPrice,
           costPrice: row.costPrice,
           reorderLevel: row.reorderLevel,
           requiresPrescription: row.requiresPrescription,

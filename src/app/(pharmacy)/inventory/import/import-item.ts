@@ -15,6 +15,8 @@ export type ImportItem = {
   unit: string;
   category: string;
   salePrice: string;
+  memberPrice: string;
+  staffPrice: string;
   costPrice: string;
   reorderLevel: string;
   requiresPrescription: boolean;
@@ -36,6 +38,8 @@ const BLANK: Omit<ImportItem, "key" | "name"> = {
   unit: "",
   category: "",
   salePrice: "",
+  memberPrice: "",
+  staffPrice: "",
   costPrice: "",
   reorderLevel: DEFAULT_REORDER_LEVEL,
   requiresPrescription: false,
@@ -69,6 +73,8 @@ export const CSV_COLUMNS = {
   unit: "unit",
   category: "category",
   sale_price: "salePrice",
+  member_price: "memberPrice",
+  staff_price: "staffPrice",
   cost_price: "costPrice",
   reorder_level: "reorderLevel",
   requires_prescription: "requiresPrescription",

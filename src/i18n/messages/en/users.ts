@@ -34,6 +34,21 @@ const users = {
   lastAdmin: "Your pharmacy needs at least one active admin.",
   adminLimit: "Your Standard plan includes one admin. Upgrade to a multi-branch plan to add more.",
   inactiveBranch: " (inactive)",
+  pin: "Drawer PIN",
+  pinSet: "Set",
+  pinNotSet: "Not set",
+  setPin: "Set PIN",
+  changePin: "Change PIN",
+  pinFor: "Cash drawer PIN for {name}.",
+  newPin: "New PIN",
+  confirmPin: "Repeat PIN",
+  pinHint: "4 to 6 digits, used at the cash drawer.",
+  savePin: "Save PIN",
+  pinSaved: "PIN saved",
+  pinInvalid: "Use 4 to 6 digits.",
+  pinMismatch: "The PINs do not match.",
+  myPinTitle: "Cash drawer PIN",
+  myPinDescription: "You enter this PIN to open, count and close a cash drawer, and to approve as a manager.",
 };
 
 export default users;

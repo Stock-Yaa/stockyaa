@@ -14,10 +14,12 @@ import { getFormat } from "@/lib/format-server";
 import { PAGE_SIZE, likePattern, pageCountOf, parsePage } from "@/lib/pagination";
 import { todayInTimezone } from "@/lib/dates";
 import { pageTitle } from "@/lib/metadata";
+import { photosOf } from "@/lib/product-images";
 import { getSellableStock } from "@/lib/stock";
 import { deleteProduct, setProductActive } from "./actions";
 import { CategoryManagerButton } from "./category-manager";
 import { ProductFormButton } from "./product-form";
+import { ProductThumb } from "@/components/product-thumb";
 
 export const generateMetadata = pageTitle("products.title");
 
@@ -89,6 +91,7 @@ export default async function ProductsPage({
       .offset((page - 1) * PAGE_SIZE),
   ]);
   const filtered = Boolean(q || category || status);
+  const photos = await photosOf(db, pharmacy.id, rows.map((r) => r.product.id));
 
   return (
     <>
@@ -147,20 +150,37 @@ export default async function ProductsPage({
                 return (
                   <TR key={product.id}>
                     <TD>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{product.name}</span>
-                        {product.requiresPrescription && (
-                          <Badge tone="info" title={t("products.rxHint")}>
-                            {t("products.rx")}
-                          </Badge>
-                        )}
+                      <div className="flex items-center gap-3">
+                        <ProductThumb photoId={photos.get(product.id)?.[0]?.id ?? null} label={t("products.noPhoto")} />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{product.name}</span>
+                            {product.requiresPrescription && (
+                              <Badge tone="info" title={t("products.rxHint")}>
+                                {t("products.rx")}
+                              </Badge>
+                            )}
+                          </div>
+                          {details && (
+                            <p className="mt-0.5 text-xs text-muted-foreground">{details}</p>
+                          )}
+                        </div>
                       </div>
-                      {details && (
-                        <p className="mt-0.5 text-xs text-muted-foreground">{details}</p>
-                      )}
                     </TD>
                     <TD>{categoryName ?? "—"}</TD>
-                    <TD className="text-right tabular-nums">{f.money(product.salePrice)}</TD>
+                    <TD className="text-right tabular-nums">
+                      {f.money(product.salePrice)}
+                      {product.memberPrice !== null && (
+                        <p className="text-xs whitespace-nowrap text-muted-foreground">
+                          {t("products.memberShort")} {f.money(product.memberPrice)}
+                        </p>
+                      )}
+                      {product.staffPrice !== null && (
+                        <p className="text-xs whitespace-nowrap text-muted-foreground">
+                          {t("products.staffShort")} {f.money(product.staffPrice)}
+                        </p>
+                      )}
+                    </TD>
                     <TD>
                       <div className="flex items-center gap-2">
                         <span className="whitespace-nowrap tabular-nums">
@@ -185,7 +205,11 @@ export default async function ProductsPage({
                     </TD>
                     <TD>
                       <div className="flex justify-end gap-1">
-                        <ProductFormButton product={product} categories={categoryOptions} />
+                        <ProductFormButton
+                          product={product}
+                          categories={categoryOptions}
+                          photos={photos.get(product.id) ?? []}
+                        />
                         {product.isActive ? (
                           <ConfirmButton
                             action={setProductActive.bind(null, product.id, false)}

@@ -30,6 +30,11 @@ const notifications: typeof en = {
   subscriptionEndedBody: "การสมัครสมาชิกของคุณสิ้นสุดเมื่อ {date} ต่ออายุเพื่อใช้งาน Stockyaa ต่อ",
   subscriptionEndingTitle: "การสมัครสมาชิกใกล้สิ้นสุด",
   subscriptionEndingBody: "การสมัครสมาชิกของคุณจะสิ้นสุดวันที่ {date} ต่ออายุเพื่อไม่ให้การใช้งานหยุดชะงัก",
+  cashReviewTitle: "ลิ้นชักเก็บเงินรอตรวจสอบ",
+  cashVarianceBody: "{staff} ปิดกะ {drawer} โดยยอดต่างไป {amount}",
+  cashVarianceBlockedBody: "{staff} ปิดกะ {drawer} โดยยอดต่างไป {amount} ลิ้นชักถูกล็อกจนกว่าคุณจะตัดสินใจ",
+  cashOpeningBody: "ยอดนับเปิดกะ {drawer} ของ {staff} ต่างจากเงินที่กะก่อนเหลือไว้ {amount}",
+  cashPayoutBody: "{staff} จ่ายเงินออก {amount} จาก {drawer} เกินวงเงินที่ต้องอนุมัติ",
 };
 
 export default notifications;

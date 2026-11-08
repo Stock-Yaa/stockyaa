@@ -29,10 +29,24 @@ export const PLAN_TYPES = ["standard", "multi_branch"] as const;
 export const PURCHASE_STATUSES = ["ordered", "received", "cancelled"] as const;
 export const SALE_STATUSES = ["completed", "refunded"] as const;
 export const PAYMENT_METHODS = ["cash", "card", "transfer"] as const;
+// Selling price levels: every product has a regular price and may have a
+// member and a staff price; a customer's level decides which one they pay.
+export const PRICE_LEVELS = ["regular", "member", "staff"] as const;
+// Date part of invoice numbers; the counter restarts whenever it changes.
+export const INVOICE_DATE_FORMATS = ["none", "YYYY", "YYYYMM", "YYYYMMDD", "YYMM", "YYMMDD"] as const;
 export const BILLING_METHODS = ["cash", "transfer", "stripe"] as const;
 export const BILLING_PAYMENT_STATUSES = ["succeeded", "failed", "refunded"] as const;
-// "expense" is cash taken out to pay a cost, kept apart from other pay-outs.
-export const CASH_MOVEMENT_TYPES = ["in", "out", "expense"] as const;
+// in = pay-in, out = pay-out (a petty cost paid from the drawer), drop = cash
+// taken to the safe, no_sale = the drawer opened without a sale (amount 0).
+// "expense" is the pay-out type of shifts recorded before pay-outs had categories.
+export const CASH_MOVEMENT_TYPES = ["in", "out", "expense", "drop", "no_sale"] as const;
+export const PAY_IN_CATEGORIES = ["float_topup", "other"] as const;
+export const PAY_OUT_CATEGORIES = ["supplies", "transport", "cleaning", "other"] as const;
+// Things a manager has to look at: a closing count that is out by more than
+// the small tolerance, an opening count that differs from what the last
+// session left, and a pay-out over the approval limit saved without a manager PIN.
+export const CASH_REVIEW_KINDS = ["variance", "opening", "payout"] as const;
+export const CASH_REVIEW_STATUSES = ["pending", "approved", "rejected"] as const;
 // Dot colour of an expense category; each maps to a theme token (see expense-colors.ts).
 export const EXPENSE_COLORS = [
   "teal",
@@ -51,6 +65,7 @@ export const NOTIFICATION_TYPES = [
   "expiring",
   "subscription_ended",
   "subscription_ending",
+  "cash_review",
 ] as const;
 export const MOVEMENT_TYPES = [
   "opening",
@@ -110,10 +125,35 @@ export const pharmacies = pgTable("pharmacies", {
   // null = no end date.
   subscriptionEndsAt: timestamp("subscription_ends_at", { withTimezone: true }),
   saleSeq: integer("sale_seq").notNull().default(0),
+  // Invoice number format (see src/lib/invoice-number.ts): prefix, an optional
+  // date part and the counter's digits, e.g. INV- + YYYYMM + 3 = INV-202611001.
+  // The counter restarts when the date part changes; invoiceSeqPeriod is the
+  // date part saleSeq is counting in ("" when there is none).
+  invoicePrefix: text("invoice_prefix").notNull().default("INV-"),
+  invoiceDateFormat: text("invoice_date_format", { enum: INVOICE_DATE_FORMATS })
+    .notNull()
+    .default("none"),
+  invoiceBuddhistYear: boolean("invoice_buddhist_year").notNull().default(false),
+  invoiceDigits: integer("invoice_digits").notNull().default(6),
+  invoiceSeqPeriod: text("invoice_seq_period").notNull().default(""),
+  // Full tax receipts have their own running numbers: same date part and
+  // digits as invoices, their own prefix and counter.
+  taxInvoicePrefix: text("tax_invoice_prefix").notNull().default("TAX-"),
+  taxSeq: integer("tax_seq").notNull().default(0),
+  taxSeqPeriod: text("tax_seq_period").notNull().default(""),
   purchaseSeq: integer("purchase_seq").notNull().default(0),
   transferSeq: integer("transfer_seq").notNull().default(0),
   // Last automatic notification scan, so page loads scan at most every few minutes.
   notificationsScannedAt: timestamp("notifications_scanned_at", { withTimezone: true }),
+  // Cash drawer rules. A closing count out by up to cashMinorTolerance only
+  // needs a reason; beyond it the cashier may recount (cashRecounts times) and
+  // then a manager reviews it; beyond cashMajorTolerance the drawer is also
+  // blocked until the manager decides. Pay-outs above payoutApprovalLimit need
+  // a manager.
+  cashMinorTolerance: money("cash_minor_tolerance").notNull().default(20),
+  cashMajorTolerance: money("cash_major_tolerance").notNull().default(200),
+  payoutApprovalLimit: money("payout_approval_limit").notNull().default(300),
+  cashRecounts: integer("cash_recounts").notNull().default(1),
   createdAt: createdAt(),
 });
 
@@ -132,6 +172,8 @@ export const branches = pgTable(
     name: text("name").notNull(),
     address: text("address"),
     phone: text("phone"),
+    // Branch number printed on tax receipts (Thai Revenue Department): 00000 = head office.
+    taxBranchCode: text("tax_branch_code"),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: createdAt(),
   },
@@ -155,6 +197,11 @@ export const users = pgTable(
     // every branch, and for super admins.
     branchId: uuid("branch_id").references(() => branches.id, { onDelete: "set null" }),
     isActive: boolean("is_active").notNull().default(true),
+    // bcrypt hash of the 4-6 digit PIN used at the cash drawer; null = no PIN yet.
+    pinHash: text("pin_hash"),
+    // Wrong PINs in a row; at the limit the PIN is locked until pinLockedUntil.
+    pinFailures: integer("pin_failures").notNull().default(0),
+    pinLockedUntil: timestamp("pin_locked_until", { withTimezone: true }),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
     createdAt: createdAt(),
   },
@@ -235,7 +282,10 @@ export const products = pgTable(
     strength: text("strength"),
     barcode: text("barcode"),
     unit: text("unit").notNull().default("pcs"),
+    // Regular price. Member and staff prices are optional; null = the regular price.
     salePrice: money("sale_price").notNull().default(0),
+    memberPrice: money("member_price"),
+    staffPrice: money("staff_price"),
     // Default cost used to pre-fill purchases; real cost lives on each batch.
     costPrice: money("cost_price").notNull().default(0),
     reorderLevel: integer("reorder_level").notNull().default(10),
@@ -391,6 +441,11 @@ export const customers = pgTable(
     email: text("email"),
     address: text("address"),
     notes: text("notes"),
+    // Pre-fill full tax receipts: tax ID and head office / branch number.
+    taxId: text("tax_id"),
+    taxBranch: text("tax_branch"),
+    // Which selling price the customer pays at the POS.
+    priceLevel: text("price_level", { enum: PRICE_LEVELS }).notNull().default("regular"),
     createdAt: createdAt(),
   },
   (t) => [index("customers_pharmacy_idx").on(t.pharmacyId)],
@@ -422,13 +477,23 @@ export const sales = pgTable(
     amountPaid: money("amount_paid").notNull().default(0),
     changeDue: money("change_due").notNull().default(0),
     status: text("status", { enum: SALE_STATUSES }).notNull().default("completed"),
+    // The selling price the items were charged at (the customer's level).
+    priceLevel: text("price_level", { enum: PRICE_LEVELS }).notNull().default("regular"),
     refundedAt: timestamp("refunded_at", { withTimezone: true }),
     notes: text("notes"),
+    // The cash drawer session the sale was rung up in (required for cash), and
+    // the one whose drawer paid out a cash refund.
+    shiftId: uuid("shift_id").references(() => cashShifts.id, { onDelete: "set null" }),
+    refundShiftId: uuid("refund_shift_id").references(() => cashShifts.id, {
+      onDelete: "set null",
+    }),
     createdAt: createdAt(),
   },
   (t) => [
     index("sales_pharmacy_created_idx").on(t.pharmacyId, t.createdAt),
     index("sales_branch_created_idx").on(t.branchId, t.createdAt),
+    index("sales_shift_idx").on(t.shiftId),
+    index("sales_refund_shift_idx").on(t.refundShiftId),
     uniqueIndex("sales_pharmacy_invoice_idx").on(t.pharmacyId, t.invoiceNumber),
   ],
 );
@@ -455,11 +520,47 @@ export const saleItems = pgTable(
   (t) => [index("sale_items_sale_idx").on(t.saleId)],
 );
 
+/** How many of each note and coin, keyed by face value ("1000": 2). */
+export type CashCounts = Record<string, number>;
+
+/** One count of the drawer at closing, kept so recounts can be compared. */
+export type CashCountAttempt = {
+  counts: CashCounts | null;
+  total: number;
+  expected: number;
+  userId: string;
+  at: string;
+};
+
 /**
- * A cash drawer shift. At most one is open per branch (closedAt is null).
- * Expected cash = opening balance + cash sales - cash refunds + pay-ins -
- * pay-outs - expenses; the totals are copied in when the shift closes so the history
- * stays the same if a sale is refunded later.
+ * A cash drawer of a branch (front counter, consult desk, …). Each one has its
+ * own sessions; floatAmount is the change it should keep between sessions.
+ * Deactivated, never deleted, so its history stays.
+ */
+export const cashDrawers = pgTable(
+  "cash_drawers",
+  {
+    id: id(),
+    pharmacyId: uuid("pharmacy_id")
+      .notNull()
+      .references(() => pharmacies.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id")
+      .notNull()
+      .references(() => branches.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    floatAmount: money("float_amount").notNull().default(2000),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("cash_drawers_branch_name_idx").on(t.branchId, t.name)],
+);
+
+/**
+ * A cash drawer session (shift). At most one is open per drawer (closedAt is
+ * null). Expected cash = opening balance + cash sales - cash refunds + pay-ins
+ * - pay-outs - expenses - drops. Sales and refunds point at the session whose
+ * drawer took or paid the cash, so a closed session never changes; its totals
+ * are also copied in when it closes.
  */
 export const cashShifts = pgTable(
   "cash_shifts",
@@ -471,9 +572,20 @@ export const cashShifts = pgTable(
     branchId: uuid("branch_id")
       .notNull()
       .references(() => branches.id, { onDelete: "cascade" }),
+    drawerId: uuid("drawer_id")
+      .notNull()
+      .references(() => cashDrawers.id, { onDelete: "cascade" }),
+    // Whoever entered their PIN to open it: the person accountable for the drawer.
     openedBy: uuid("opened_by").references(() => users.id, { onDelete: "set null" }),
     openedAt: timestamp("opened_at", { withTimezone: true }).notNull().defaultNow(),
+    // The float counted into the drawer, and how it was made up.
     openingBalance: money("opening_balance").notNull(),
+    openingCounts: jsonb("opening_counts").$type<CashCounts>(),
+    // What the previous session of the drawer left in it; null for a drawer's first session.
+    previousShiftId: uuid("previous_shift_id"),
+    expectedOpening: money("expected_opening"),
+    // Counts of the drawer at closing; the last one closes the session.
+    countAttempts: jsonb("count_attempts").$type<CashCountAttempt[]>().notNull().default([]),
     closedBy: uuid("closed_by").references(() => users.id, { onDelete: "set null" }),
     closedAt: timestamp("closed_at", { withTimezone: true }),
     // Set when the shift closes.
@@ -482,18 +594,29 @@ export const cashShifts = pgTable(
     payIns: money("pay_ins"),
     payOuts: money("pay_outs"),
     expenses: money("expenses"),
+    drops: money("drops"),
+    cardSales: money("card_sales"),
+    transferSales: money("transfer_sales"),
+    salesCount: integer("sales_count"),
     expectedCash: money("expected_cash"),
     countedCash: money("counted_cash"),
+    closingCounts: jsonb("closing_counts").$type<CashCounts>(),
     // counted - expected: positive = over, negative = short.
     difference: money("difference"),
+    // The cashier's explanation of a difference.
     note: text("note"),
+    // Cash taken to the safe at closing; the rest stays in the drawer for the next session.
+    closingDrop: money("closing_drop"),
+    closingBag: text("closing_bag"),
+    leftInDrawer: money("left_in_drawer"),
     createdAt: createdAt(),
   },
   (t) => [
     index("cash_shifts_pharmacy_idx").on(t.pharmacyId, t.openedAt),
     index("cash_shifts_branch_idx").on(t.branchId, t.openedAt),
+    index("cash_shifts_drawer_idx").on(t.drawerId, t.openedAt),
     uniqueIndex("cash_shifts_one_open_idx")
-      .on(t.branchId)
+      .on(t.drawerId)
       .where(sql`${t.closedAt} is null`),
   ],
 );
@@ -511,11 +634,60 @@ export const cashMovements = pgTable(
       .references(() => cashShifts.id, { onDelete: "cascade" }),
     type: text("type", { enum: CASH_MOVEMENT_TYPES }).notNull(),
     amount: money("amount").notNull(),
+    // PAY_IN_CATEGORIES or PAY_OUT_CATEGORIES; null for drops, no-sales and older rows.
+    category: text("category"),
     reason: text("reason").notNull(),
+    // Cash drops: the bag or envelope number and the notes that went in it.
+    bagNumber: text("bag_number"),
+    counts: jsonb("counts").$type<CashCounts>(),
+    // Pay-outs: path of the receipt photo in file storage.
+    receiptPath: text("receipt_path"),
+    // The manager whose PIN allowed a pay-out over the approval limit.
+    approvedBy: uuid("approved_by").references(() => users.id, { onDelete: "set null" }),
     userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
     createdAt: createdAt(),
   },
   (t) => [index("cash_movements_shift_idx").on(t.shiftId, t.createdAt)],
+);
+
+/**
+ * An item in the manager's review queue (see CASH_REVIEW_KINDS). A pending
+ * blocking review keeps its drawer from opening until a manager decides.
+ */
+export const cashReviews = pgTable(
+  "cash_reviews",
+  {
+    id: id(),
+    pharmacyId: uuid("pharmacy_id")
+      .notNull()
+      .references(() => pharmacies.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id")
+      .notNull()
+      .references(() => branches.id, { onDelete: "cascade" }),
+    drawerId: uuid("drawer_id")
+      .notNull()
+      .references(() => cashDrawers.id, { onDelete: "cascade" }),
+    shiftId: uuid("shift_id")
+      .notNull()
+      .references(() => cashShifts.id, { onDelete: "cascade" }),
+    movementId: uuid("movement_id").references(() => cashMovements.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: CASH_REVIEW_KINDS }).notNull(),
+    // Signed difference for counts (negative = short), the amount for a pay-out.
+    amount: money("amount").notNull(),
+    blocking: boolean("blocking").notNull().default(false),
+    // Whose count or pay-out it is.
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    status: text("status", { enum: CASH_REVIEW_STATUSES }).notNull().default("pending"),
+    reviewedBy: uuid("reviewed_by").references(() => users.id, { onDelete: "set null" }),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    reviewNote: text("review_note"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("cash_reviews_pharmacy_status_idx").on(t.pharmacyId, t.status, t.createdAt),
+    index("cash_reviews_shift_idx").on(t.shiftId),
+    index("cash_reviews_drawer_idx").on(t.drawerId, t.status),
+  ],
 );
 
 export const expenseCategories = pgTable(
@@ -699,6 +871,63 @@ export const stockTransferItems = pgTable(
   (t) => [index("stock_transfer_items_transfer_idx").on(t.transferId)],
 );
 
+/**
+ * A full tax receipt (Thai ใบกำกับภาษีเต็มรูป) for a sale, with its own running
+ * number and the buyer's details as they were when it was issued. One per sale.
+ */
+export const taxInvoices = pgTable(
+  "tax_invoices",
+  {
+    id: id(),
+    pharmacyId: uuid("pharmacy_id")
+      .notNull()
+      .references(() => pharmacies.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id")
+      .notNull()
+      .references(() => branches.id, { onDelete: "cascade" }),
+    saleId: uuid("sale_id")
+      .notNull()
+      .references(() => sales.id, { onDelete: "cascade" }),
+    number: text("number").notNull(),
+    buyerName: text("buyer_name").notNull(),
+    buyerTaxId: text("buyer_tax_id").notNull(),
+    buyerAddress: text("buyer_address").notNull(),
+    // "Head office" (สำนักงานใหญ่) or a branch number.
+    buyerBranch: text("buyer_branch"),
+    issuedBy: uuid("issued_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("tax_invoices_sale_idx").on(t.saleId),
+    uniqueIndex("tax_invoices_pharmacy_number_idx").on(t.pharmacyId, t.number),
+    index("tax_invoices_pharmacy_created_idx").on(t.pharmacyId, t.createdAt),
+  ],
+);
+
+/** Photos of a product; one of them is its main photo. Files live in private storage. */
+export const productImages = pgTable(
+  "product_images",
+  {
+    id: id(),
+    pharmacyId: uuid("pharmacy_id")
+      .notNull()
+      .references(() => pharmacies.id, { onDelete: "cascade" }),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    path: text("path").notNull(),
+    isMain: boolean("is_main").notNull().default(false),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("product_images_product_idx").on(t.productId, t.createdAt),
+    // At most one main photo per product.
+    uniqueIndex("product_images_one_main_idx")
+      .on(t.productId)
+      .where(sql`${t.isMain}`),
+  ],
+);
+
 // ---------------------------------------------------------------------------
 // Relations (for db.query.*)
 // ---------------------------------------------------------------------------
@@ -789,8 +1018,16 @@ export type StockMovement = typeof stockMovements.$inferSelect;
 export type Customer = typeof customers.$inferSelect;
 export type Sale = typeof sales.$inferSelect;
 export type SaleItem = typeof saleItems.$inferSelect;
+export type PriceLevel = (typeof PRICE_LEVELS)[number];
+export type TaxInvoice = typeof taxInvoices.$inferSelect;
+export type ProductImage = typeof productImages.$inferSelect;
+export type CashDrawer = typeof cashDrawers.$inferSelect;
 export type CashShift = typeof cashShifts.$inferSelect;
 export type CashMovement = typeof cashMovements.$inferSelect;
+export type CashMovementType = (typeof CASH_MOVEMENT_TYPES)[number];
+export type CashReview = typeof cashReviews.$inferSelect;
+export type CashReviewKind = (typeof CASH_REVIEW_KINDS)[number];
+export type CashReviewStatus = (typeof CASH_REVIEW_STATUSES)[number];
 export type ExpenseCategory = typeof expenseCategories.$inferSelect;
 export type ExpenseColor = (typeof EXPENSE_COLORS)[number];
 export type Expense = typeof expenses.$inferSelect;

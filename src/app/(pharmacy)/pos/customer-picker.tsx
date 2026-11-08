@@ -2,13 +2,31 @@
 
 import { Search, UserPlus, UserRound, X } from "lucide-react";
 import { useId, useState } from "react";
+import { Badge } from "@/components/ui/card";
 import { Input } from "@/components/ui/form";
+import type { PriceLevel } from "@/db/schema";
 import { useT } from "@/i18n/client";
+import { PRICE_LEVEL_TONE } from "@/lib/price-labels";
 import { cn } from "@/lib/utils";
 
-export type PosCustomer = { id: string; name: string; phone: string | null };
+export type PosCustomer = {
+  id: string;
+  name: string;
+  phone: string | null;
+  priceLevel: PriceLevel;
+  /** Saved details for a full tax receipt. */
+  taxId: string | null;
+  taxBranch: string | null;
+  address: string | null;
+};
 
 const MAX_MATCHES = 8;
+
+const PRICE_LEVEL_PRICE = {
+  regular: "pos.priceRegular",
+  member: "pos.priceMember",
+  staff: "pos.priceStaff",
+} as const;
 
 type Option = { kind: "customer"; customer: PosCustomer } | { kind: "create"; name: string };
 
@@ -93,6 +111,9 @@ export function CustomerPicker({
           {selected.name}
           {selected.phone && <span className="ml-1.5 font-normal opacity-75">{selected.phone}</span>}
         </span>
+        {selected.priceLevel !== "regular" && (
+          <Badge tone={PRICE_LEVEL_TONE[selected.priceLevel]}>{t(PRICE_LEVEL_PRICE[selected.priceLevel])}</Badge>
+        )}
         <button
           type="button"
           disabled={disabled}
@@ -157,6 +178,11 @@ export function CustomerPicker({
                 <>
                   <UserRound className="size-4 shrink-0 text-muted-foreground" />
                   <span className="min-w-0 flex-1 truncate">{option.customer.name}</span>
+                  {option.customer.priceLevel !== "regular" && (
+                    <Badge tone={PRICE_LEVEL_TONE[option.customer.priceLevel]}>
+                      {t(PRICE_LEVEL_PRICE[option.customer.priceLevel])}
+                    </Badge>
+                  )}
                   {option.customer.phone && (
                     <span className="text-xs text-muted-foreground">{option.customer.phone}</span>
                   )}

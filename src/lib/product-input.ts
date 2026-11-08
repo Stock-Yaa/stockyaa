@@ -18,7 +18,7 @@ import {
 const MAX_MONEY = 999_999_999;
 const MAX_QUANTITY = 1_000_000;
 
-const blankTo = (fallback: number) => (v: unknown) =>
+const blankTo = (fallback: number | null) => (v: unknown) =>
   v == null || (typeof v === "string" && v.trim() === "") ? fallback : v;
 
 const money = nonNegativeNumber.refine((v) => v <= MAX_MONEY, "products.numberTooLarge");
@@ -37,6 +37,9 @@ export const productFields = {
   barcode: optionalText(100),
   unit: optionalText(30),
   salePrice: money,
+  // Blank = sell at the regular price.
+  memberPrice: z.preprocess(blankTo(null), money.nullable()),
+  staffPrice: z.preprocess(blankTo(null), money.nullable()),
   costPrice: z.preprocess(blankTo(0), money),
   reorderLevel: z.preprocess(blankTo(0), wholeNumber),
   requiresPrescription: checkbox,

@@ -14,6 +14,7 @@ import { requirePharmacy } from "@/lib/auth";
 import { listBranches } from "@/lib/branches";
 import { getFormat } from "@/lib/format-server";
 import { pageTitle } from "@/lib/metadata";
+import { PRICE_LEVEL_LABEL } from "@/lib/price-labels";
 import { PAGE_SIZE, pageCountOf, parsePage } from "@/lib/pagination";
 import { requiredId } from "@/lib/validation";
 import { CustomerFormButton } from "../customer-form";
@@ -84,6 +85,13 @@ export default async function CustomerDetailPage({
     { label: t("common.phone"), value: customer.phone },
     { label: t("common.email"), value: customer.email },
     { label: t("common.address"), value: customer.address },
+    { label: t("customers.priceLevel"), value: t(PRICE_LEVEL_LABEL[customer.priceLevel]) },
+    {
+      label: t("taxReceipt.customerTaxId"),
+      value: customer.taxId
+        ? `${customer.taxId}${customer.taxBranch ? ` · ${customer.taxBranch === "00000" ? t("taxReceipt.headOffice") : t("taxReceipt.branchNo", { code: customer.taxBranch })}` : ""}`
+        : null,
+    },
     { label: t("common.notes"), value: customer.notes },
     { label: t("customers.customerSince"), value: f.date(customer.createdAt) },
   ];

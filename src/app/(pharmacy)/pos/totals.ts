@@ -13,6 +13,17 @@ export type SalePayload = {
   paymentMethod: PaymentMethod;
   /** Cash handed over; ignored for card and transfer. */
   amountPaid: number;
+  /** The open session of this till's drawer; required to take cash. */
+  shiftId: string | null;
+  /** Buyer details when the customer asked for a full tax receipt. */
+  taxBuyer: {
+    buyerName: string;
+    buyerTaxId: string;
+    buyerAddress: string;
+    buyerBranch: string;
+    saveToCustomer: boolean;
+    customerId: string | null;
+  } | null;
 };
 
 export type SaleTotals = {

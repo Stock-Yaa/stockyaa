@@ -3,6 +3,7 @@
 import {
   Banknote,
   CircleCheck,
+  FileText,
   CreditCard,
   Landmark,
   Minus,
@@ -15,6 +16,7 @@ import {
   ShoppingBag,
   Trash2,
   TriangleAlert,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -22,6 +24,7 @@ import { unstable_rethrow, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { useFormat, usePharmacy } from "@/components/pharmacy-context";
+import { ProductThumb } from "@/components/product-thumb";
 import { Button, buttonClass } from "@/components/ui/button";
 import { Badge, Card } from "@/components/ui/card";
 import { DropdownMenu } from "@/components/ui/dropdown-menu";
@@ -30,8 +33,16 @@ import { Modal, ModalFooter } from "@/components/ui/modal";
 import { EmptyState } from "@/components/ui/page";
 import { useT } from "@/i18n/client";
 import type { MessageKey } from "@/i18n/messages";
+import { priceFor } from "@/lib/pricing";
 import { cn, round2 } from "@/lib/utils";
 import { createPosCustomer, createSale } from "./actions";
+import {
+  TaxBuyerFields,
+  buyerFrom,
+  buyerPayload,
+  buyerReady,
+  type TaxBuyer,
+} from "../sales/tax-buyer-fields";
 import { CustomerPicker, type PosCustomer } from "./customer-picker";
 import { computeSaleTotals, type PaymentMethod, type SalePayload } from "./totals";
 
@@ -42,11 +53,16 @@ export type PosProduct = {
   strength: string | null;
   barcode: string | null;
   unit: string;
+  /** Regular price; member and staff prices are null when they follow it. */
   salePrice: number;
+  memberPrice: number | null;
+  staffPrice: number | null;
   requiresPrescription: boolean;
   categoryId: string | null;
   /** Sellable (unexpired) units on hand. */
   stock: number;
+  /** The product's main photo, if it has one. */
+  photoId: string | null;
   /** Expiry (YYYY-MM-DD) of the batch FEFO sells from next; null if it never expires. */
   nextExpiry: string | null;
   /** The next batch expires within the pharmacy's "expiring soon" window. */
@@ -55,10 +71,11 @@ export type PosProduct = {
 
 type PosCategory = { id: string; name: string };
 type CartEntry = { productId: string; quantity: number };
-type CartLine = { product: PosProduct; quantity: number; total: number };
+type CartLine = { product: PosProduct; quantity: number; unitPrice: number; total: number };
 type CompletedSale = {
   saleId: string;
   invoiceNumber: string;
+  taxInvoiceNumber: string | null;
   total: number;
   changeDue: number;
 };
@@ -93,10 +110,13 @@ export function PosTerminal({
   products,
   customers,
   categories,
+  cashShiftId,
 }: {
   products: PosProduct[];
   customers: PosCustomer[];
   categories: PosCategory[];
+  /** The open session of this till's drawer; cash cannot be taken without one. */
+  cashShiftId: string | null;
 }) {
   const t = useT();
   const f = useFormat();
@@ -115,6 +135,9 @@ export function PosTerminal({
   const [method, setMethod] = useState<PaymentMethod>("cash");
   const [receivedInput, setReceivedInput] = useState("");
   const [completed, setCompleted] = useState<CompletedSale | null>(null);
+  // A full tax receipt the customer asked for, issued with the sale.
+  const [taxBuyer, setTaxBuyer] = useState<TaxBuyer | null>(null);
+  const [buyerDraft, setBuyerDraft] = useState<TaxBuyer | null>(null);
   const [pending, startTransition] = useTransition();
 
   // F1 jumps to the product search from anywhere on the screen.
@@ -139,13 +162,19 @@ export function PosTerminal({
     return [...customers, ...added.filter((c) => !known.has(c.id))];
   }, [customers, added]);
 
+  // Falls back to walk-in if the chosen customer was deleted in the meantime.
+  const selectedCustomer = allCustomers.find((c) => c.id === customerId) ?? null;
+  // The customer's price level sets every price; createSale charges the same.
+  const priceLevel = selectedCustomer?.priceLevel ?? "regular";
+
   // Lines are derived from the latest product data, so after a refresh the
   // quantities can never exceed what is actually in stock.
   const lines: CartLine[] = cart.flatMap((entry) => {
     const product = productById.get(entry.productId);
     if (!product) return [];
     const quantity = Math.max(0, Math.min(entry.quantity, product.stock));
-    return [{ product, quantity, total: round2(quantity * product.salePrice) }];
+    const unitPrice = priceFor(product, priceLevel);
+    return [{ product, quantity, unitPrice, total: round2(quantity * unitPrice) }];
   });
   const quantityInCart = new Map(lines.map((line) => [line.product.id, line.quantity]));
   const unitCount = lines.reduce((sum, line) => sum + line.quantity, 0);
@@ -153,16 +182,15 @@ export function PosTerminal({
   const hasPrescription = lines.some((line) => line.product.requiresPrescription);
 
   const totals = computeSaleTotals(
-    lines.map((line) => ({ quantity: line.quantity, unitPrice: line.product.salePrice })),
+    lines.map((line) => ({ quantity: line.quantity, unitPrice: line.unitPrice })),
     parseAmount(discountInput),
     taxRate,
   );
-  // Falls back to walk-in if the chosen customer was deleted in the meantime.
-  const selectedCustomer = allCustomers.find((c) => c.id === customerId) ?? null;
   const isCash = method === "cash";
   const received = parseAmount(receivedInput);
   const paidEnough = !isCash || received >= totals.total;
-  const canComplete = lines.length > 0 && !hasUnavailable && paidEnough && !pending;
+  const drawerClosed = isCash && !cashShiftId;
+  const canComplete = lines.length > 0 && !hasUnavailable && paidEnough && !drawerClosed && !pending;
 
   const term = query.trim().toLowerCase();
   const visibleProducts = products.filter(
@@ -259,6 +287,8 @@ export function PosTerminal({
       discount: totals.discount,
       paymentMethod: method,
       amountPaid: isCash ? received : totals.total,
+      shiftId: cashShiftId,
+      taxBuyer: taxBuyer ? buyerPayload(taxBuyer, selectedCustomer?.id ?? null) : null,
     };
     startTransition(async () => {
       try {
@@ -266,6 +296,7 @@ export function PosTerminal({
         if (result.ok) {
           setCart([]);
           setCustomerId("");
+          setTaxBuyer(null);
           setShowDiscount(false);
           setDiscountInput("");
           setReceivedInput("");
@@ -274,6 +305,7 @@ export function PosTerminal({
           setCompleted({
             saleId: result.saleId,
             invoiceNumber: result.invoiceNumber,
+            taxInvoiceNumber: result.taxInvoiceNumber,
             total: result.total,
             changeDue: result.changeDue,
           });
@@ -365,6 +397,7 @@ export function PosTerminal({
                   key={product.id}
                   product={product}
                   inCart={quantityInCart.get(product.id) ?? 0}
+                  price={priceFor(product, priceLevel)}
                   onAdd={() => {
                     addProduct(product);
                     refocusSearch();
@@ -386,6 +419,27 @@ export function PosTerminal({
             onCreate={addCustomer}
             disabled={pending}
           />
+          {taxBuyer && (
+            <div className="flex items-center gap-2 rounded-lg border border-info/40 bg-info/10 px-3 py-2 text-sm text-info">
+              <FileText className="size-4 shrink-0" />
+              <button
+                type="button"
+                onClick={() => setBuyerDraft(taxBuyer)}
+                className="min-w-0 flex-1 truncate text-left font-medium hover:underline"
+              >
+                {t("pos.taxReceiptFor", { name: taxBuyer.buyerName })}
+              </button>
+              <button
+                type="button"
+                onClick={() => setTaxBuyer(null)}
+                aria-label={t("pos.removeTaxReceipt")}
+                title={t("pos.removeTaxReceipt")}
+                className="-mr-1 rounded-md p-1 hover:bg-background/60"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2">
@@ -404,6 +458,12 @@ export function PosTerminal({
                   if (discountShown) setDiscountInput("");
                   setShowDiscount(!discountShown);
                 },
+              },
+              {
+                label: taxBuyer ? t("pos.editTaxReceipt") : t("pos.requestTaxReceipt"),
+                icon: FileText,
+                disabled: pending,
+                onSelect: () => setBuyerDraft(taxBuyer ?? buyerFrom(selectedCustomer)),
               },
               {
                 label: t("pos.clearCart"),
@@ -464,6 +524,18 @@ export function PosTerminal({
               ))}
             </div>
           </div>
+
+          {drawerClosed && (
+            <p className="flex gap-2 rounded-lg bg-warning/15 px-3 py-2 text-sm text-warning">
+              <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+              <span>
+                {t("pos.cashNeedsDrawer")}{" "}
+                <Link href="/cash-drawer" className="font-medium underline">
+                  {t("pos.openDrawer")}
+                </Link>
+              </span>
+            </p>
+          )}
 
           {isCash && (
             <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-3">
@@ -583,6 +655,35 @@ export function PosTerminal({
       </Card>
 
       <Modal
+        open={buyerDraft !== null}
+        onClose={() => setBuyerDraft(null)}
+        title={t("pos.taxReceiptTitle")}
+        description={t("pos.taxReceiptHint")}
+        size="lg"
+      >
+        {buyerDraft && (
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              setTaxBuyer(buyerDraft);
+              setBuyerDraft(null);
+            }}
+            className="grid gap-4"
+          >
+            <TaxBuyerFields value={buyerDraft} onChange={setBuyerDraft} hasCustomer={selectedCustomer !== null} />
+            <ModalFooter>
+              <Button variant="outline" onClick={() => setBuyerDraft(null)}>
+                {t("common.cancel")}
+              </Button>
+              <Button type="submit" disabled={!buyerReady(buyerDraft)}>
+                {t("pos.useTaxReceipt")}
+              </Button>
+            </ModalFooter>
+          </form>
+        )}
+      </Modal>
+
+      <Modal
         open={completed !== null}
         onClose={startNewSale}
         title={t("pos.saleCompleted")}
@@ -594,6 +695,11 @@ export function PosTerminal({
               <CircleCheck className="size-12 text-success" />
               <p className="mt-3 text-sm text-muted-foreground">{t("sales.invoice")}</p>
               <p className="text-lg font-semibold">{completed.invoiceNumber}</p>
+              {completed.taxInvoiceNumber && (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {t("pos.taxReceiptIssued", { number: completed.taxInvoiceNumber })}
+                </p>
+              )}
             </div>
             <dl className="mt-4 space-y-1.5 border-t border-border pt-4 text-sm">
               <SummaryRow label={t("sales.total")} value={f.money(completed.total)} strong />
@@ -609,6 +715,17 @@ export function PosTerminal({
                 <Printer />
                 {t("pos.printReceipt")}
               </Link>
+              {completed.taxInvoiceNumber && (
+                <Link
+                  href={`/sales/${completed.saleId}/tax-receipt?print=1`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={buttonClass({ variant: "outline" })}
+                >
+                  <FileText />
+                  {t("pos.printTaxReceipt")}
+                </Link>
+              )}
               <Button autoFocus onClick={startNewSale}>
                 <Plus />
                 {t("pos.newSale")}
@@ -641,10 +758,13 @@ function SummaryRow({
 function ProductTile({
   product,
   inCart,
+  price,
   onAdd,
 }: {
   product: PosProduct;
   inCart: number;
+  /** The price at the selected customer's level. */
+  price: number;
   onAdd: () => void;
 }) {
   const t = useT();
@@ -665,7 +785,10 @@ function ProductTile({
       )}
     >
       <span className="flex w-full items-start justify-between gap-2">
-        <span className="leading-snug font-semibold">{product.name}</span>
+        <span className="flex min-w-0 items-start gap-2">
+          {product.photoId && <ProductThumb photoId={product.photoId} label="" size={36} />}
+          <span className="leading-snug font-semibold">{product.name}</span>
+        </span>
         {(product.requiresPrescription || product.expiresSoon) && (
           <span className="flex shrink-0 flex-wrap justify-end gap-1">
             {product.requiresPrescription && (
@@ -691,7 +814,12 @@ function ProductTile({
       )}
       <span className="mt-auto flex w-full flex-wrap items-center justify-between gap-x-2 gap-y-1 pt-3">
         <span className="font-semibold text-primary tabular-nums">
-          {f.money(product.salePrice)}
+          {f.money(price)}
+          {price !== product.salePrice && (
+            <span className="ml-1.5 text-xs font-normal text-muted-foreground line-through">
+              {f.money(product.salePrice)}
+            </span>
+          )}
         </span>
         <span
           className={cn(
@@ -749,7 +877,7 @@ function CartRow({
       </div>
       <div className="mt-1.5 flex items-center justify-between gap-3">
         <p className="truncate text-xs text-muted-foreground">
-          {t("pos.unitPrice", { price: f.money(product.salePrice), unit: product.unit })}
+          {t("pos.unitPrice", { price: f.money(line.unitPrice), unit: product.unit })}
         </p>
         <div className="flex shrink-0 items-center gap-1">
           {quantity < 1 ? (

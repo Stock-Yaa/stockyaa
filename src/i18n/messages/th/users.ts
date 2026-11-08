@@ -36,6 +36,21 @@ const users: typeof en = {
   lastAdmin: "ร้านยาต้องมีผู้ดูแลที่เปิดใช้งานอย่างน้อยหนึ่งคน",
   adminLimit: "แพ็กเกจมาตรฐานของคุณมีผู้ดูแลได้ 1 คน อัปเกรดเป็นแพ็กเกจหลายสาขาเพื่อเพิ่มผู้ดูแล",
   inactiveBranch: " (ปิดใช้งาน)",
+  pin: "PIN ลิ้นชัก",
+  pinSet: "ตั้งแล้ว",
+  pinNotSet: "ยังไม่ตั้ง",
+  setPin: "ตั้ง PIN",
+  changePin: "เปลี่ยน PIN",
+  pinFor: "PIN ลิ้นชักเก็บเงินของ {name}",
+  newPin: "PIN ใหม่",
+  confirmPin: "ยืนยัน PIN",
+  pinHint: "ตัวเลข 4 ถึง 6 หลัก ใช้ที่ลิ้นชักเก็บเงิน",
+  savePin: "บันทึก PIN",
+  pinSaved: "บันทึก PIN แล้ว",
+  pinInvalid: "ใช้ตัวเลข 4 ถึง 6 หลัก",
+  pinMismatch: "PIN ไม่ตรงกัน",
+  myPinTitle: "PIN ลิ้นชักเก็บเงิน",
+  myPinDescription: "ใช้ PIN นี้เพื่อเปิด นับ และปิดกะลิ้นชักเก็บเงิน และเพื่ออนุมัติในฐานะผู้จัดการ",
 };
 
 export default users;

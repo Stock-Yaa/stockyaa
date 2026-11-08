@@ -4,11 +4,12 @@ import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getDb } from "@/db";
-import { customers } from "@/db/schema";
+import { PRICE_LEVELS, customers } from "@/db/schema";
 import type { MessageKey } from "@/i18n/messages";
 import { getT } from "@/i18n/server";
 import { fieldErrorsFrom, type ActionState } from "@/lib/action";
 import { requirePharmacy } from "@/lib/auth";
+import { customerTaxFields } from "@/lib/tax-invoice";
 import {
   formToObject,
   optionalEmail,
@@ -25,6 +26,8 @@ const customerSchema = z.object({
   email: optionalEmail,
   address: optionalText(),
   notes: optionalText(),
+  priceLevel: z.enum(PRICE_LEVELS, { error: "common.invalidChoice" }).default("regular"),
+  ...customerTaxFields,
 });
 
 /** Creates a customer, or updates it when the form carries an `id`. */

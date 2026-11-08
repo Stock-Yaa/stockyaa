@@ -1,22 +1,25 @@
 import { and, asc, eq } from "drizzle-orm";
-import { ArrowLeft, Undo2 } from "lucide-react";
+import { ArrowLeft, FileText, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { buttonClass } from "@/components/ui/button";
 import { ConfirmButton } from "@/components/ui/confirm-button";
 import { PageHeader } from "@/components/ui/page";
 import { getDb } from "@/db";
-import { customers, saleItems, sales, users } from "@/db/schema";
+import { customers, saleItems, sales, taxInvoices, users } from "@/db/schema";
 import { getT } from "@/i18n/server";
 import { requirePharmacy } from "@/lib/auth";
 import { branchScope, inScope } from "@/lib/branches";
+import { getDrawerState } from "@/lib/cash-drawer";
 import { getFormat } from "@/lib/format-server";
 import { pageTitle } from "@/lib/metadata";
+import { PRICE_LEVEL_LABEL } from "@/lib/price-labels";
 import { round2 } from "@/lib/utils";
 import { requiredId } from "@/lib/validation";
 import { refundSale } from "../actions";
 import { PAYMENT_METHOD_LABEL } from "../labels";
 import { PrintButton } from "./print-button";
+import { IssueTaxReceiptButton } from "./tax-receipt-button";
 
 export const generateMetadata = pageTitle("sales.receipt");
 
@@ -50,17 +53,34 @@ export default async function SaleReceiptPage({
   const db = await getDb();
 
   const [row] = await db
-    .select({ sale: sales, customerName: customers.name, cashierName: users.name })
+    .select({
+      sale: sales,
+      customerName: customers.name,
+      customerTaxId: customers.taxId,
+      customerTaxBranch: customers.taxBranch,
+      customerAddress: customers.address,
+      cashierName: users.name,
+      taxNumber: taxInvoices.number,
+    })
     .from(sales)
     .leftJoin(
       customers,
       and(eq(sales.customerId, customers.id), eq(customers.pharmacyId, pharmacy.id)),
     )
     .leftJoin(users, and(eq(sales.userId, users.id), eq(users.pharmacyId, pharmacy.id)))
+    .leftJoin(taxInvoices, and(eq(taxInvoices.saleId, sales.id), eq(taxInvoices.pharmacyId, pharmacy.id)))
     .where(and(eq(sales.id, id), inScope(sales, branchScope(branch))))
     .limit(1);
   if (!row) notFound();
-  const { sale, customerName, cashierName } = row;
+  const { sale, customerName, cashierName, taxNumber } = row;
+
+  // A cash refund is paid from this device's drawer, while its session is open.
+  const drawer =
+    sale.status === "completed" && sale.paymentMethod === "cash"
+      ? await getDrawerState(db, branch, t("cashDrawer.defaultDrawerName"))
+      : null;
+  const refundShiftId =
+    drawer?.shift && drawer.shift.countAttempts.length === 0 ? drawer.shift.id : null;
 
   const items = await db
     .select({
@@ -109,6 +129,9 @@ export default async function SaleReceiptPage({
     [t("sales.cashier"), cashierName ?? "—"],
     [t("sales.customer"), customerName ?? t("sales.walkIn")],
   ];
+  if (sale.priceLevel !== "regular") {
+    details.push([t("sales.priceLevel"), t(PRICE_LEVEL_LABEL[sale.priceLevel])]);
+  }
   const totals: LabelledValue[] = [[t("sales.subtotal"), f.money(sale.subtotal)]];
   if (sale.discount > 0) totals.push([t("sales.discount"), `−${f.money(sale.discount)}`]);
   if (sale.tax > 0) totals.push([t("sales.tax"), f.money(sale.tax)]);
@@ -129,15 +152,43 @@ export default async function SaleReceiptPage({
         </Link>
         {sale.status === "completed" && (
           <ConfirmButton
-            action={refundSale.bind(null, sale.id, branch.id)}
+            action={refundSale.bind(null, sale.id, branch.id, refundShiftId)}
             title={t("sales.refundTitle")}
-            body={t("sales.refundBody")}
+            body={
+              sale.paymentMethod !== "cash"
+                ? t("sales.refundBody")
+                : refundShiftId
+                  ? t("sales.refundBodyCash", { drawer: drawer?.drawer?.name ?? "" })
+                  : t("sales.refundNeedsDrawer")
+            }
             confirmLabel={t("sales.refund")}
             variant="outline"
           >
             <Undo2 />
             {t("sales.refund")}
           </ConfirmButton>
+        )}
+        {taxNumber ? (
+          <Link href={`/sales/${sale.id}/tax-receipt`} className={buttonClass({ variant: "outline" })}>
+            <FileText />
+            {t("taxReceipt.view", { number: taxNumber })}
+          </Link>
+        ) : (
+          sale.status === "completed" && (
+            <IssueTaxReceiptButton
+              saleId={sale.id}
+              customer={
+                customerName
+                  ? {
+                      name: customerName,
+                      taxId: row.customerTaxId,
+                      taxBranch: row.customerTaxBranch,
+                      address: row.customerAddress,
+                    }
+                  : null
+              }
+            />
+          )
         )}
         <PrintButton auto={print === "1"} />
       </PageHeader>

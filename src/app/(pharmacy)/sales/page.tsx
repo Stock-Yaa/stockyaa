@@ -7,7 +7,7 @@ import { FilterSelect, Pagination, SearchInput } from "@/components/ui/list-cont
 import { EmptyState, PageHeader, Toolbar } from "@/components/ui/page";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/table";
 import { getDb } from "@/db";
-import { SALE_STATUSES, customers, sales } from "@/db/schema";
+import { SALE_STATUSES, customers, sales, taxInvoices } from "@/db/schema";
 import { getT } from "@/i18n/server";
 import { requirePharmacy } from "@/lib/auth";
 import { branchScope, inScope } from "@/lib/branches";
@@ -83,9 +83,11 @@ export default async function SalesPage({
         paymentMethod: sales.paymentMethod,
         status: sales.status,
         total: sales.total,
+        taxNumber: taxInvoices.number,
       })
       .from(sales)
       .leftJoin(customers, customerJoin)
+      .leftJoin(taxInvoices, and(eq(taxInvoices.saleId, sales.id), eq(taxInvoices.pharmacyId, pharmacy.id)))
       .where(where)
       .orderBy(desc(sales.createdAt), desc(sales.invoiceNumber))
       .limit(PAGE_SIZE)
@@ -163,6 +165,11 @@ export default async function SalesPage({
                     >
                       {sale.invoiceNumber}
                     </Link>
+                    {sale.taxNumber && (
+                      <Badge tone="info" className="ml-2" title={sale.taxNumber}>
+                        {t("taxReceipt.badge")}
+                      </Badge>
+                    )}
                   </TD>
                   <TD className="whitespace-nowrap">{f.dateTime(sale.createdAt)}</TD>
                   <TD>

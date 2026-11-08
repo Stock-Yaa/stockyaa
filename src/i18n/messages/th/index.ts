@@ -28,6 +28,7 @@ import assistant from "./assistant";
 import aiAnalytics from "./aiAnalytics";
 import refills from "./refills";
 import aiSettings from "./aiSettings";
+import taxReceipt from "./taxReceipt";
 
 const messages = {
   common,
@@ -60,6 +61,7 @@ const messages = {
   aiAnalytics,
   refills,
   aiSettings,
+  taxReceipt,
 };
 
 export default messages;

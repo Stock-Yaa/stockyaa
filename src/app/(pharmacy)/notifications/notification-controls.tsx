@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Calculator,
   CalendarClock,
   CalendarX,
   CheckCheck,
@@ -65,6 +66,7 @@ const ICONS: Record<NotificationType, { icon: typeof Package; className: string 
   expiring: { icon: CalendarClock, className: "text-warning" },
   subscription_ended: { icon: CreditCard, className: "text-destructive" },
   subscription_ending: { icon: CreditCard, className: "text-info" },
+  cash_review: { icon: Calculator, className: "text-warning" },
 };
 
 /**
