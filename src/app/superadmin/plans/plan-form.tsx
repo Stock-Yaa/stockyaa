@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { useFormAction } from "@/components/ui/use-form-action";
-import type { Plan } from "@/db/schema";
+import { PLAN_TYPES, type Plan } from "@/db/schema";
 import { useT } from "@/i18n/client";
+import { PLAN_TYPE_LABEL } from "@/lib/billing-labels";
 import { savePlan } from "./actions";
 
 /** "Add plan" button, or a pencil icon when editing, plus the form dialog. */
@@ -24,6 +25,7 @@ export function PlanFormButton({
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
+  const [type, setType] = useState<Plan["type"]>(plan?.type ?? "standard");
   const { onSubmit, pending, errors } = useFormAction(savePlan, {
     onSuccess: () => setOpen(false),
   });
@@ -136,24 +138,48 @@ export function PlanFormButton({
             </Select>
           </Field>
           <Field
-            label={t("platform.maxBranches")}
-            htmlFor="plan-branches"
-            error={errors.maxBranches}
-            hint={t("platform.maxBranchesHint")}
+            label={t("platform.planType")}
+            htmlFor="plan-type"
+            error={errors.type}
+            hint={t("platform.planTypeHint")}
             required
+            className="sm:col-span-2"
           >
-            <Input
-              id="plan-branches"
-              name="maxBranches"
-              type="number"
-              inputMode="numeric"
-              min={1}
-              max={1000}
-              step={1}
-              defaultValue={plan?.maxBranches ?? 1}
+            <Select
+              id="plan-type"
+              name="type"
+              value={type}
+              onChange={(e) => setType(e.target.value as Plan["type"])}
               required
-            />
+            >
+              {PLAN_TYPES.map((value) => (
+                <option key={value} value={value}>
+                  {t(PLAN_TYPE_LABEL[value])}
+                </option>
+              ))}
+            </Select>
           </Field>
+          {type === "multi_branch" && (
+            <Field
+              label={t("platform.maxBranches")}
+              htmlFor="plan-branches"
+              error={errors.maxBranches}
+              hint={t("platform.maxBranchesHint")}
+              required
+            >
+              <Input
+                id="plan-branches"
+                name="maxBranches"
+                type="number"
+                inputMode="numeric"
+                min={2}
+                max={1000}
+                step={1}
+                defaultValue={Math.max(plan?.maxBranches ?? 2, 2)}
+                required
+              />
+            </Field>
+          )}
           <Field
             label={t("platform.sortOrder")}
             htmlFor="plan-sort"

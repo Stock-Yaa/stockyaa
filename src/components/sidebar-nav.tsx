@@ -14,6 +14,8 @@ export type NavLink = {
   icon: LucideIcon;
   /** Shown to pharmacy admins only. */
   adminOnly?: boolean;
+  /** Hidden for a pharmacy that runs a single branch on a Standard plan. */
+  multiBranchOnly?: boolean;
 };
 export type NavGroup = { label: MessageKey; icon: LucideIcon; items: NavLink[] };
 export type NavEntry = NavLink | NavGroup;

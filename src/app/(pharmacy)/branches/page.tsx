@@ -11,7 +11,7 @@ import { batches, users } from "@/db/schema";
 import { getT } from "@/i18n/server";
 import { canSwitchBranch } from "@/lib/active-branch";
 import { requirePharmacy } from "@/lib/auth";
-import { branchLimit, limitReachedKey, listBranches } from "@/lib/branches";
+import { limitReachedKey, listBranches, planLimits } from "@/lib/branches";
 import { getFormat } from "@/lib/format-server";
 import { pageTitle } from "@/lib/metadata";
 import { setBranchActive } from "./actions";
@@ -25,9 +25,9 @@ export default async function BranchesPage() {
   if (!canSwitchBranch(user)) notFound();
   const [t, f, db] = await Promise.all([getT(), getFormat(pharmacy), getDb()]);
 
-  const [rows, limit, staffRows, stockRows] = await Promise.all([
+  const [rows, { multiBranch, maxBranches: limit }, staffRows, stockRows] = await Promise.all([
     listBranches(db, pharmacy.id),
-    branchLimit(db, pharmacy),
+    planLimits(db, pharmacy),
     db
       .select({ branchId: users.branchId, count: sql<number>`count(*)`.mapWith(Number) })
       .from(users)
@@ -53,10 +53,13 @@ export default async function BranchesPage() {
   return (
     <>
       <PageHeader title={t("branches.title")} description={t("branches.description")}>
-        <BranchFormButton
-          disabled={full}
-          title={full ? t(limitReachedKey(limit), { limit }) : undefined}
-        />
+        {/* Only a multi-branch plan offers adding branches; Standard runs one. */}
+        {multiBranch && (
+          <BranchFormButton
+            disabled={full}
+            title={full ? t(limitReachedKey(limit), { limit }) : undefined}
+          />
+        )}
       </PageHeader>
 
       <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">

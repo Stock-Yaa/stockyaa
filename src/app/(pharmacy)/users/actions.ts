@@ -5,12 +5,13 @@ import { and, eq, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getDb, type Tx } from "@/db";
-import { branches, users } from "@/db/schema";
+import { branches, pharmacies, users, type Pharmacy } from "@/db/schema";
 import type { MessageKey } from "@/i18n/messages";
 import { getT } from "@/i18n/server";
 import { fieldErrorsFrom, type ActionState } from "@/lib/action";
 import { canSwitchBranch } from "@/lib/active-branch";
 import { requirePharmacy } from "@/lib/auth";
+import { planLimits } from "@/lib/branches";
 import { isUniqueViolation } from "@/lib/db-error";
 import {
   formToObject,
@@ -63,6 +64,35 @@ async function otherActiveAdmin(tx: Tx, pharmacyId: string, exceptUserId: string
 }
 
 /**
+ * True when the plan has no room for another active admin besides
+ * `exceptUserId` (a Standard plan has one). Locks the pharmacy so two requests
+ * cannot both take the last admin seat.
+ */
+async function adminLimitReached(
+  tx: Tx,
+  pharmacy: Pick<Pharmacy, "id" | "planId">,
+  exceptUserId: string | null,
+) {
+  const { maxAdmins } = await planLimits(tx, pharmacy);
+  if (maxAdmins === null) return false;
+  await tx
+    .select({ id: pharmacies.id })
+    .from(pharmacies)
+    .where(eq(pharmacies.id, pharmacy.id))
+    .for("update");
+  const count = await tx.$count(
+    users,
+    and(
+      eq(users.pharmacyId, pharmacy.id),
+      eq(users.role, "admin"),
+      eq(users.isActive, true),
+      exceptUserId ? ne(users.id, exceptUserId) : undefined,
+    ),
+  );
+  return count >= maxAdmins;
+}
+
+/**
  * Creates a user (with a password), or updates one when the form carries an
  * `id`. Staff must work in an active branch of the pharmacy; admins work in
  * every branch, so their branch is cleared.
@@ -107,6 +137,9 @@ export async function saveUser(formData: FormData): Promise<ActionState> {
       }
 
       if (!id) {
+        if (role === "admin" && (await adminLimitReached(tx, pharmacy, null))) {
+          return "users.adminLimit";
+        }
         await tx.insert(users).values({
           name,
           email,
@@ -131,6 +164,14 @@ export async function saveUser(formData: FormData): Promise<ActionState> {
         !(await otherActiveAdmin(tx, pharmacy.id, id))
       ) {
         return "users.lastAdmin";
+      }
+      if (
+        existing.role !== "admin" &&
+        role === "admin" &&
+        existing.isActive &&
+        (await adminLimitReached(tx, pharmacy, id))
+      ) {
+        return "users.adminLimit";
       }
       // A password typed on the edit form is ignored: resetting has its own dialog.
       await tx.update(users).set({ name, email, role, branchId }).where(eq(users.id, id));
@@ -206,6 +247,9 @@ export async function setUserActive(userId: string, isActive: boolean): Promise<
     if (!target) return "common.notFound";
     if (!active && target.role === "admin" && !(await otherActiveAdmin(tx, pharmacy.id, targetId))) {
       return "users.lastAdmin";
+    }
+    if (active && target.role === "admin" && (await adminLimitReached(tx, pharmacy, targetId))) {
+      return "users.adminLimit";
     }
     // Staff can only be activated into a branch that is itself active.
     if (active && target.role === "staff") {

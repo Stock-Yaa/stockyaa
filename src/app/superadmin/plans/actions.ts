@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { CURRENCIES } from "@/lib/options";
 import { getDb } from "@/db";
-import { pharmacies, plans } from "@/db/schema";
+import { PLAN_TYPES, pharmacies, plans } from "@/db/schema";
 import type { MessageKey } from "@/i18n/messages";
 import { getT } from "@/i18n/server";
 import { fieldErrorsFrom, type ActionState } from "@/lib/action";
@@ -34,7 +34,12 @@ const planSchema = z.object({
     nonNegativeNumber.pipe(z.number().max(9_999_999_999.99, "common.invalidNumber")).nullable(),
   ),
   currency: z.enum(CURRENCIES, { error: "platform.invalidOption" }),
-  maxBranches: positiveInt.pipe(z.number().max(1000, "common.invalidNumber")),
+  type: z.enum(PLAN_TYPES, { error: "platform.invalidOption" }),
+  // A Standard plan always runs one branch, whatever the form sent.
+  maxBranches: z.preprocess(
+    (v) => (v === undefined || v === "" ? 1 : v),
+    positiveInt.pipe(z.number().max(1000, "common.invalidNumber")),
+  ),
   isActive: checkbox,
   sortOrder: nonNegativeInt.pipe(z.number().max(2_147_483_647, "common.invalidNumber")),
 });
@@ -52,8 +57,12 @@ export async function savePlan(formData: FormData): Promise<ActionState> {
     };
   }
   const { id, ...rest } = parsed.data;
+  if (rest.type === "multi_branch" && rest.maxBranches < 2) {
+    return { ok: false, fieldErrors: { maxBranches: t("platform.multiBranchMin") } };
+  }
   const values = {
     ...rest,
+    maxBranches: rest.type === "standard" ? 1 : rest.maxBranches,
     priceMonthly: round2(rest.priceMonthly),
     priceYearly: rest.priceYearly === null ? null : round2(rest.priceYearly),
   };

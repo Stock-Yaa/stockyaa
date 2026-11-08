@@ -29,12 +29,14 @@ function UserForm({
   branches,
   defaultBranchId,
   isSelf,
+  canAddAdmin,
   onDone,
 }: {
   user?: UserRow;
   branches: BranchOption[];
   defaultBranchId: string;
   isSelf: boolean;
+  canAddAdmin: boolean;
   onDone: () => void;
 }) {
   const t = useT();
@@ -68,7 +70,13 @@ function UserForm({
         label={t("users.role")}
         htmlFor="user-role"
         error={errors.role}
-        hint={isSelf ? t("users.notYourself") : t("users.roleHint")}
+        hint={
+          isSelf
+            ? t("users.notYourself")
+            : canAddAdmin
+              ? t("users.roleHint")
+              : t("users.adminLimit")
+        }
         required
       >
         {/* A disabled select is not submitted, so the role travels in a hidden field. */}
@@ -81,7 +89,9 @@ function UserForm({
           disabled={isSelf}
         >
           <option value="staff">{t("users.roleStaff")}</option>
-          <option value="admin">{t("users.roleAdmin")}</option>
+          <option value="admin" disabled={!canAddAdmin}>
+            {t("users.roleAdmin")}
+          </option>
         </Select>
       </Field>
       {role === "staff" && (
@@ -142,12 +152,15 @@ export function UserFormButton({
   branches,
   defaultBranchId,
   isSelf = false,
+  canAddAdmin = true,
 }: {
   user?: UserRow;
   /** Active branches a staff member can be assigned to. */
   branches: BranchOption[];
   defaultBranchId: string;
   isSelf?: boolean;
+  /** False when the plan's admin seats are taken, so the Admin role is offered disabled. */
+  canAddAdmin?: boolean;
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -181,6 +194,7 @@ export function UserFormButton({
           branches={branches}
           defaultBranchId={defaultBranchId}
           isSelf={isSelf}
+          canAddAdmin={canAddAdmin}
           onDone={() => setOpen(false)}
         />
       </Modal>

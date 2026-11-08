@@ -9,6 +9,7 @@ import { getDb } from "@/db";
 import { pharmacies, plans } from "@/db/schema";
 import { getLocale, getT } from "@/i18n/server";
 import { requireSuperAdmin } from "@/lib/auth";
+import { PLAN_TYPE_LABEL } from "@/lib/billing-labels";
 import { getFormat } from "@/lib/format-server";
 import { pageTitle } from "@/lib/metadata";
 import { deletePlan } from "./actions";
@@ -56,6 +57,7 @@ export default async function PlansPage() {
           <THead>
             <tr>
               <TH>{t("common.name")}</TH>
+              <TH>{t("platform.planType")}</TH>
               <TH className="text-right">{t("platform.priceMonthly")}</TH>
               <TH className="text-right">{t("billing.priceYearly")}</TH>
               <TH className="text-right">{t("platform.colBranches")}</TH>
@@ -73,6 +75,11 @@ export default async function PlansPage() {
                   {plan.description && (
                     <p className="max-w-md text-xs text-muted-foreground">{plan.description}</p>
                   )}
+                </TD>
+                <TD>
+                  <Badge tone={plan.type === "multi_branch" ? "info" : "muted"}>
+                    {t(PLAN_TYPE_LABEL[plan.type])}
+                  </Badge>
                 </TD>
                 <TD className="text-right whitespace-nowrap tabular-nums">
                   {(priceFormats.get(plan.currency) ?? f).money(plan.priceMonthly)}

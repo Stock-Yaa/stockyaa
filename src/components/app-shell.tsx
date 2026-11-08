@@ -83,8 +83,14 @@ const PHARMACY_NAV: NavEntry[] = [
       { href: "/inventory", label: "nav.inventory", icon: Boxes },
       { href: "/inventory/alerts", label: "nav.stockAlerts", icon: TriangleAlert },
       { href: "/inventory/movements", label: "nav.stockMovements", icon: ArrowLeftRight },
-      { href: "/inventory/branches", label: "nav.stockByBranch", icon: Store, adminOnly: true },
-      { href: "/transfers", label: "nav.stockTransfers", icon: Send },
+      {
+        href: "/inventory/branches",
+        label: "nav.stockByBranch",
+        icon: Store,
+        adminOnly: true,
+        multiBranchOnly: true,
+      },
+      { href: "/transfers", label: "nav.stockTransfers", icon: Send, multiBranchOnly: true },
       { href: "/inventory/import", label: "nav.bulkImport", icon: FileUp },
     ],
   },
@@ -126,7 +132,13 @@ const PHARMACY_NAV: NavEntry[] = [
     label: "nav.groupAdmin",
     icon: UserCog,
     items: [
-      { href: "/branches", label: "nav.branches", icon: Store, adminOnly: true },
+      {
+        href: "/branches",
+        label: "nav.branches",
+        icon: Store,
+        adminOnly: true,
+        multiBranchOnly: true,
+      },
       { href: "/users", label: "nav.users", icon: UsersRound, adminOnly: true },
       { href: "/ai/settings", label: "nav.aiConfig", icon: Settings2, adminOnly: true },
       { href: "/subscription", label: "nav.billing", icon: CreditCard },
@@ -154,17 +166,19 @@ const PLATFORM_NAV: NavEntry[] = [
   },
 ];
 
-/** The menu without the admin-only links, for staff. */
-function staffNav(entries: NavEntry[]): NavEntry[] {
-  const visible = (link: NavLink) => !link.adminOnly;
-  return entries.flatMap((entry): NavEntry[] => {
+/**
+ * The pharmacy menu for this user: staff lose the admin-only links, and a
+ * single-branch pharmacy loses the links that only make sense with several.
+ */
+function pharmacyNav(isAdmin: boolean, multiBranch: boolean): NavEntry[] {
+  const visible = (link: NavLink) =>
+    (isAdmin || !link.adminOnly) && (multiBranch || !link.multiBranchOnly);
+  return PHARMACY_NAV.flatMap((entry): NavEntry[] => {
     if (!("items" in entry)) return visible(entry) ? [entry] : [];
     const items = entry.items.filter(visible);
     return items.length > 0 ? [{ ...entry, items }] : [];
   });
 }
-
-const STAFF_NAV = staffNav(PHARMACY_NAV);
 
 const ROLE_LABEL: Record<string, MessageKey> = {
   superadmin: "nav.platformAdmin",
@@ -183,6 +197,7 @@ export function AppShell({
   user,
   banner,
   unreadNotifications,
+  multiBranch = true,
   children,
 }: {
   variant: "pharmacy" | "platform";
@@ -191,16 +206,14 @@ export function AppShell({
   banner?: React.ReactNode;
   /** Shows a bell linking to /notifications, with this many unread. */
   unreadNotifications?: number;
+  /** False hides the branch, stock-by-branch and transfer links (Standard plan, one branch). */
+  multiBranch?: boolean;
   children: React.ReactNode;
 }) {
   const t = useT();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const entries =
-    variant === "platform"
-      ? PLATFORM_NAV
-      : user.role === "admin"
-        ? PHARMACY_NAV
-        : STAFF_NAV;
+    variant === "platform" ? PLATFORM_NAV : pharmacyNav(user.role === "admin", multiBranch);
   const home = variant === "platform" ? "/superadmin" : "/dashboard";
 
   const brand = (

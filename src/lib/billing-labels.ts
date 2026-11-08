@@ -1,5 +1,10 @@
-import type { BillingPayment } from "@/db/schema";
+import type { BillingPayment, Plan } from "@/db/schema";
 import type { MessageKey } from "@/i18n/messages";
+
+export const PLAN_TYPE_LABEL: Record<Plan["type"], MessageKey> = {
+  standard: "platform.planTypeStandard",
+  multi_branch: "platform.planTypeMultiBranch",
+};
 
 export const METHOD_LABEL: Record<BillingPayment["method"], MessageKey> = {
   cash: "billing.methodCash",

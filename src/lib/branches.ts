@@ -33,18 +33,35 @@ export function listBranches(db: DbOrTx, pharmacyId: string): Promise<Branch[]> 
     .orderBy(asc(branches.createdAt), asc(branches.name));
 }
 
-/** How many active branches the pharmacy's plan allows (1 without a plan). */
+/**
+ * What the pharmacy's plan allows. A Standard plan (or no plan) runs one
+ * branch with one admin; a multi-branch plan runs up to `maxBranches`
+ * branches with any number of admins (`maxAdmins` null).
+ */
+export type PlanLimits = { multiBranch: boolean; maxBranches: number; maxAdmins: number | null };
+
+const STANDARD_LIMITS: PlanLimits = { multiBranch: false, maxBranches: 1, maxAdmins: 1 };
+
+export async function planLimits(
+  db: DbOrTx,
+  pharmacy: Pick<Pharmacy, "planId">,
+): Promise<PlanLimits> {
+  if (!pharmacy.planId) return STANDARD_LIMITS;
+  const [plan] = await db
+    .select({ type: plans.type, maxBranches: plans.maxBranches })
+    .from(plans)
+    .where(eq(plans.id, pharmacy.planId))
+    .limit(1);
+  if (plan?.type !== "multi_branch") return STANDARD_LIMITS;
+  return { multiBranch: true, maxBranches: plan.maxBranches, maxAdmins: null };
+}
+
+/** How many active branches the pharmacy's plan allows (1 on Standard or without a plan). */
 export async function branchLimit(
   db: DbOrTx,
   pharmacy: Pick<Pharmacy, "planId">,
 ): Promise<number> {
-  if (!pharmacy.planId) return 1;
-  const [plan] = await db
-    .select({ maxBranches: plans.maxBranches })
-    .from(plans)
-    .where(eq(plans.id, pharmacy.planId))
-    .limit(1);
-  return plan?.maxBranches ?? 1;
+  return (await planLimits(db, pharmacy)).maxBranches;
 }
 
 /** Message key for "your plan includes N branches", in the singular for one. */

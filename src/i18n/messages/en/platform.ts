@@ -166,6 +166,12 @@ const platform = {
   planActive: "Active",
   planActiveHint: "Only active plans can be assigned and are shown to pharmacies.",
   colPharmacies: "Pharmacies",
+  planType: "Plan type",
+  planTypeHint:
+    "Standard: one branch and one admin. Multi branch: several branches and any number of admins.",
+  planTypeStandard: "Standard",
+  planTypeMultiBranch: "Multi branch",
+  multiBranchMin: "A multi-branch plan includes at least 2 branches",
   maxBranches: "Branches included",
   maxBranchesHint: "How many active branches a pharmacy on this plan can run.",
   colBranches: "Branches",

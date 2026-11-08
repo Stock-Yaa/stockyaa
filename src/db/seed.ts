@@ -86,12 +86,11 @@ export async function seedDatabase(db: Db, options: SeedOptions): Promise<boolea
   };
 
   await db.transaction(async (tx) => {
-    const [starter, standard, pro] = await tx
+    const [standard, multiBranch] = await tx
       .insert(plans)
       .values([
-        { name: "Starter", description: "For a single small pharmacy.", priceMonthly: 590, priceYearly: 5900, maxBranches: 1, sortOrder: 1 },
-        { name: "Standard", description: "Full stock, purchasing and reports for up to 3 branches.", priceMonthly: 1290, priceYearly: 12900, maxBranches: 3, sortOrder: 2 },
-        { name: "Pro", description: "For pharmacy chains with many branches and staff.", priceMonthly: 2490, priceYearly: 24900, maxBranches: 10, sortOrder: 3 },
+        { name: "Standard", type: "standard", description: "One branch with one admin: full stock, sales, purchasing and reports.", priceMonthly: 990, priceYearly: 9900, maxBranches: 1, sortOrder: 1 },
+        { name: "Multi Branch", type: "multi_branch", description: "Up to 10 branches, stock transfers and any number of admins.", priceMonthly: 2490, priceYearly: 24900, maxBranches: 10, sortOrder: 2 },
       ])
       .returning();
 
@@ -117,7 +116,7 @@ export async function seedDatabase(db: Db, options: SeedOptions): Promise<boolea
         address: "123 Sukhumvit Road, Bangkok 10110",
         licenseNumber: "DEMO-0001",
         timezone,
-        planId: standard.id,
+        planId: multiBranch.id,
         subscriptionStatus: "active",
         subscriptionEndsAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
         receiptFooter: "Thank you. Get well soon!",
@@ -441,10 +440,10 @@ export async function seedDatabase(db: Db, options: SeedOptions): Promise<boolea
       payments.push({
         pharmacyId,
         pharmacyName: pharmacy.name,
-        planId: standard.id,
-        planName: standard.name,
-        amount: standard.priceMonthly,
-        currency: standard.currency,
+        planId: multiBranch.id,
+        planName: multiBranch.name,
+        amount: multiBranch.priceMonthly,
+        currency: multiBranch.currency,
         method: month % 2 === 0 ? "transfer" : "cash",
         months: 1,
         periodEnd: daysAgo(month * 30 - 60),
@@ -457,10 +456,10 @@ export async function seedDatabase(db: Db, options: SeedOptions): Promise<boolea
     // A few more pharmacies (no stock data) so the platform dashboard shows
     // every subscription state. Their admins sign in with the demo password.
     const others = [
-      { name: "Sukhumvit Health Pharmacy", plan: pro, status: "active", joined: 65, endsIn: 300, paid: [{ ago: 63, months: 12, method: "transfer" }] },
+      { name: "Sukhumvit Health Pharmacy", plan: multiBranch, status: "active", joined: 65, endsIn: 300, paid: [{ ago: 63, months: 12, method: "transfer" }] },
       { name: "Hat Yai Family Pharmacy", plan: standard, status: "active", joined: 40, endsIn: 5, paid: [{ ago: 38, months: 1, method: "cash" }, { ago: 8, months: 1, method: "cash" }] },
-      { name: "Chiang Mai Drugstore", plan: starter, status: "active", joined: 120, endsIn: -6, paid: [{ ago: 118, months: 1, method: "cash" }, { ago: 88, months: 1, method: "transfer" }, { ago: 58, months: 1, method: "cash" }] },
-      { name: "Phuket Care Pharmacy", plan: starter, status: "trial", joined: 3, endsIn: 11, paid: [] },
+      { name: "Chiang Mai Drugstore", plan: standard, status: "active", joined: 120, endsIn: -6, paid: [{ ago: 118, months: 1, method: "cash" }, { ago: 88, months: 1, method: "transfer" }, { ago: 58, months: 1, method: "cash" }] },
+      { name: "Phuket Care Pharmacy", plan: standard, status: "trial", joined: 3, endsIn: 11, paid: [] },
     ] as const;
     for (const [index, other] of others.entries()) {
       const [created] = await tx

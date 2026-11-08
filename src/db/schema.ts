@@ -23,6 +23,9 @@ const createdAt = () =>
 export const USER_ROLES = ["superadmin", "admin", "staff"] as const;
 export const PHARMACY_STATUSES = ["active", "suspended"] as const;
 export const SUBSCRIPTION_STATUSES = ["trial", "active", "cancelled"] as const;
+// Standard: one branch and one admin. Multi branch: up to maxBranches
+// branches, any number of admins.
+export const PLAN_TYPES = ["standard", "multi_branch"] as const;
 export const PURCHASE_STATUSES = ["ordered", "received", "cancelled"] as const;
 export const SALE_STATUSES = ["completed", "refunded"] as const;
 export const PAYMENT_METHODS = ["cash", "card", "transfer"] as const;
@@ -74,7 +77,8 @@ export const plans = pgTable("plans", {
   // null = no yearly option.
   priceYearly: money("price_yearly"),
   currency: text("currency").notNull().default("THB"),
-  // How many active branches a pharmacy on this plan may run.
+  type: text("type", { enum: PLAN_TYPES }).notNull().default("standard"),
+  // How many active branches a pharmacy on this plan may run (always 1 on Standard).
   maxBranches: integer("max_branches").notNull().default(1),
   isActive: boolean("is_active").notNull().default(true),
   sortOrder: integer("sort_order").notNull().default(0),

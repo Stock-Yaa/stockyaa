@@ -32,6 +32,7 @@ const users = {
   deactivated: "User deactivated",
   notYourself: "You cannot change your own role or deactivate yourself here.",
   lastAdmin: "Your pharmacy needs at least one active admin.",
+  adminLimit: "Your Standard plan includes one admin. Upgrade to a multi-branch plan to add more.",
   inactiveBranch: " (inactive)",
 };
 

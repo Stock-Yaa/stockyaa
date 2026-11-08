@@ -1,0 +1,15 @@
+# Files never uploaded by `vercel` deploys from this machine.
+
+# secrets: production variables are set in the Vercel dashboard
+.env*
+!.env.example
+
+# local embedded database
+/.pglite/
+
+# build output and dependencies, rebuilt by Vercel
+/node_modules
+/.next/
+/out/
+*.tsbuildinfo
+next-env.d.ts

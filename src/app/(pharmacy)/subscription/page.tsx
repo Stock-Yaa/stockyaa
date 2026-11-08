@@ -6,6 +6,7 @@ import { getDb } from "@/db";
 import { branches, plans } from "@/db/schema";
 import { getT } from "@/i18n/server";
 import { hasAccess, requirePharmacy } from "@/lib/auth";
+import { PLAN_TYPE_LABEL } from "@/lib/billing-labels";
 import { getFormat } from "@/lib/format-server";
 import { now } from "@/lib/time";
 import { daysLeftLabel, subscriptionState } from "@/lib/subscription";
@@ -171,6 +172,9 @@ export default async function SubscriptionPage() {
                       <p className="font-semibold">{plan.name}</p>
                       {isCurrent && <Badge>{t("subscription.yourPlan")}</Badge>}
                     </div>
+                    <Badge tone={plan.type === "multi_branch" ? "info" : "muted"} className="mt-1">
+                      {t(PLAN_TYPE_LABEL[plan.type])}
+                    </Badge>
                     <p className="mt-2 text-lg font-semibold tabular-nums">
                       {pricePerMonth(plan)}
                     </p>

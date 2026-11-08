@@ -10,7 +10,7 @@ import { users } from "@/db/schema";
 import { getT } from "@/i18n/server";
 import { canSwitchBranch } from "@/lib/active-branch";
 import { requirePharmacy } from "@/lib/auth";
-import { listBranches } from "@/lib/branches";
+import { listBranches, planLimits } from "@/lib/branches";
 import { getFormat } from "@/lib/format-server";
 import { pageTitle } from "@/lib/metadata";
 import { setUserActive } from "./actions";
@@ -24,7 +24,7 @@ export default async function UsersPage() {
   if (!canSwitchBranch(me)) notFound();
   const [t, f, db] = await Promise.all([getT(), getFormat(pharmacy), getDb()]);
 
-  const [rows, allBranches] = await Promise.all([
+  const [rows, allBranches, { maxAdmins }] = await Promise.all([
     // Explicit columns: the password hash never leaves the database.
     db
       .select({
@@ -40,15 +40,19 @@ export default async function UsersPage() {
       .where(and(eq(users.pharmacyId, pharmacy.id), ne(users.role, "superadmin")))
       .orderBy(asc(users.createdAt)),
     listBranches(db, pharmacy.id),
+    planLimits(db, pharmacy),
   ]);
 
   const branchById = new Map(allBranches.map((b) => [b.id, b]));
   const options = allBranches.filter((b) => b.isActive).map((b) => ({ id: b.id, name: b.name }));
+  // A Standard plan has one admin seat; once taken, nobody else can become an admin.
+  const activeAdmins = rows.filter((r) => r.role === "admin" && r.isActive).length;
+  const canAddAdmin = maxAdmins === null || activeAdmins < maxAdmins;
 
   return (
     <>
       <PageHeader title={t("users.title")} description={t("users.description")}>
-        <UserFormButton branches={options} defaultBranchId={branch.id} />
+        <UserFormButton branches={options} defaultBranchId={branch.id} canAddAdmin={canAddAdmin} />
       </PageHeader>
 
       <Table>
@@ -106,6 +110,7 @@ export default async function UsersPage() {
                       branches={options}
                       defaultBranchId={branch.id}
                       isSelf={isSelf}
+                      canAddAdmin={canAddAdmin || (role === "admin" && row.isActive)}
                     />
                     {!isSelf && <ResetPasswordButton user={row} />}
                     {!isSelf &&
@@ -131,6 +136,7 @@ export default async function UsersPage() {
                           variant="ghost"
                           size="icon"
                           aria-label={t("users.activate")}
+                          disabled={role === "admin" && !canAddAdmin}
                         >
                           <Power />
                         </ConfirmButton>

@@ -57,6 +57,13 @@
       "when": 1792492914929,
       "tag": "0007_ai_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793278059848,
+      "tag": "0008_plan_types",
+      "breakpoints": true
     }
   ]
 }
