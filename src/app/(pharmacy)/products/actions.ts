@@ -41,7 +41,13 @@ export async function saveProduct(formData: FormData): Promise<ActionState> {
   }
   const { id, unit, openingQuantity, openingBatchNumber, openingExpiryDate, ...rest } =
     parsed.data;
-  const values = { ...rest, unit: unit ?? "pcs" };
+  const values = {
+    ...rest,
+    unit: unit ?? "pcs",
+    // A fixed price wins over a percent; only one is kept.
+    memberDiscount: rest.memberPrice === null ? rest.memberDiscount : null,
+    staffDiscount: rest.staffPrice === null ? rest.staffDiscount : null,
+  };
   // Only opening stock is branch data; editing a product works from any branch.
   if (!id && openingQuantity > 0 && branchChanged(formData, branch)) {
     return { ok: false, message: t("branches.changedElsewhere") };

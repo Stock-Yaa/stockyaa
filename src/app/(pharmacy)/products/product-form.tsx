@@ -12,6 +12,7 @@ import type { Product } from "@/db/schema";
 import { useT } from "@/i18n/client";
 import type { PhotoRef } from "@/lib/product-images-client";
 import { saveProduct } from "./actions";
+import { PriceFields } from "./price-fields";
 import { ProductPhotos, uploadPhotos, type QueuedPhoto } from "./product-photos";
 
 export type CategoryOption = { id: string; name: string };
@@ -153,55 +154,7 @@ export function ProductFormButton({
           <Field label={t("products.barcode")} htmlFor="barcode" error={errors.barcode}>
             <Input id="barcode" name="barcode" defaultValue={product?.barcode ?? ""} />
           </Field>
-          <Field
-            label={t("products.salePriceWithCurrency", { currency })}
-            htmlFor="salePrice"
-            error={errors.salePrice}
-            required
-          >
-            <Input
-              id="salePrice"
-              name="salePrice"
-              type="number"
-              inputMode="decimal"
-              min={0}
-              step="0.01"
-              defaultValue={product?.salePrice}
-              required
-            />
-          </Field>
-          <Field
-            label={t("products.memberPriceWithCurrency", { currency })}
-            htmlFor="memberPrice"
-            error={errors.memberPrice}
-            hint={t("products.levelPriceHint")}
-          >
-            <Input
-              id="memberPrice"
-              name="memberPrice"
-              type="number"
-              inputMode="decimal"
-              min={0}
-              step="0.01"
-              defaultValue={product?.memberPrice ?? ""}
-            />
-          </Field>
-          <Field
-            label={t("products.staffPriceWithCurrency", { currency })}
-            htmlFor="staffPrice"
-            error={errors.staffPrice}
-            hint={t("products.levelPriceHint")}
-          >
-            <Input
-              id="staffPrice"
-              name="staffPrice"
-              type="number"
-              inputMode="decimal"
-              min={0}
-              step="0.01"
-              defaultValue={product?.staffPrice ?? ""}
-            />
-          </Field>
+          <PriceFields product={product} errors={errors} />
           <Field
             label={t("products.costPriceWithCurrency", { currency })}
             htmlFor="costPrice"

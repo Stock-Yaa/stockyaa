@@ -172,12 +172,12 @@ export default async function ProductsPage({
                     <TD className="text-right tabular-nums">
                       {f.money(product.salePrice)}
                       {/* Its own price, or the pharmacy's rule for the level. */}
-                      {(product.memberPrice !== null || pharmacy.memberDiscount) && (
+                      {(product.memberPrice !== null || product.memberDiscount || pharmacy.memberDiscount) && (
                         <p className="text-xs whitespace-nowrap text-muted-foreground">
                           {t("products.memberShort")} {f.money(priceFor(product, "member", pharmacy))}
                         </p>
                       )}
-                      {(product.staffPrice !== null || pharmacy.staffDiscount) && (
+                      {(product.staffPrice !== null || product.staffDiscount || pharmacy.staffDiscount) && (
                         <p className="text-xs whitespace-nowrap text-muted-foreground">
                           {t("products.staffShort")} {f.money(priceFor(product, "staff", pharmacy))}
                         </p>

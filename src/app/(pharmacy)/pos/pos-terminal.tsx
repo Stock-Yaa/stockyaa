@@ -57,6 +57,8 @@ export type PosProduct = {
   salePrice: number;
   memberPrice: number | null;
   staffPrice: number | null;
+  memberDiscount: number | null;
+  staffDiscount: number | null;
   requiresPrescription: boolean;
   categoryId: string | null;
   /** Sellable (unexpired) units on hand. */

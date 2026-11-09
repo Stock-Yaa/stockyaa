@@ -91,6 +91,8 @@ export async function createSale(payload: SalePayload): Promise<CreateSaleResult
       salePrice: products.salePrice,
       memberPrice: products.memberPrice,
       staffPrice: products.staffPrice,
+      memberDiscount: products.memberDiscount,
+      staffDiscount: products.staffDiscount,
     })
     .from(products)
     .where(

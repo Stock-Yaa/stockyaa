@@ -21,6 +21,7 @@ const MAX_QUANTITY = 1_000_000;
 const blankTo = (fallback: number | null) => (v: unknown) =>
   v == null || (typeof v === "string" && v.trim() === "") ? fallback : v;
 
+const percent = nonNegativeNumber.refine((v) => v <= 100, "settings.percentRange");
 const money = nonNegativeNumber.refine((v) => v <= MAX_MONEY, "products.numberTooLarge");
 const wholeNumber = nonNegativeInt.refine(
   (v) => v <= MAX_QUANTITY,
@@ -37,9 +38,12 @@ export const productFields = {
   barcode: optionalText(100),
   unit: optionalText(30),
   salePrice: money,
-  // Blank = sell at the regular price.
+  // A fixed price or a percent off the regular price; blank = the pharmacy's
+  // rule, or the regular price.
   memberPrice: z.preprocess(blankTo(null), money.nullable()),
   staffPrice: z.preprocess(blankTo(null), money.nullable()),
+  memberDiscount: z.preprocess(blankTo(null), percent.nullable()),
+  staffDiscount: z.preprocess(blankTo(null), percent.nullable()),
   costPrice: z.preprocess(blankTo(0), money),
   reorderLevel: z.preprocess(blankTo(0), wholeNumber),
   requiresPrescription: checkbox,

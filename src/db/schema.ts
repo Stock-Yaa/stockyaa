@@ -319,10 +319,14 @@ export const products = pgTable(
     strength: text("strength"),
     barcode: text("barcode"),
     unit: text("unit").notNull().default("pcs"),
-    // Regular price. Member and staff prices are optional; null = the regular price.
+    // Regular price. Member and staff prices are optional: a fixed price, or a
+    // percent off the regular price (at most one of the two is set). Neither =
+    // the pharmacy's rule, or the regular price.
     salePrice: money("sale_price").notNull().default(0),
     memberPrice: money("member_price"),
     staffPrice: money("staff_price"),
+    memberDiscount: numeric("member_discount", { precision: 5, scale: 2, mode: "number" }),
+    staffDiscount: numeric("staff_discount", { precision: 5, scale: 2, mode: "number" }),
     // Default cost used to pre-fill purchases; real cost lives on each batch.
     costPrice: money("cost_price").notNull().default(0),
     reorderLevel: integer("reorder_level").notNull().default(10),

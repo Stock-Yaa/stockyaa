@@ -8,22 +8,29 @@ import type { Pharmacy, PriceLevel, Product } from "@/db/schema";
 /** The schema's levels, without bundling the schema into the browser. */
 export const PRICE_LEVEL_OPTIONS = ["regular", "member", "staff"] as const satisfies readonly PriceLevel[];
 
-export type ProductPrices = Pick<Product, "salePrice" | "memberPrice" | "staffPrice">;
+export type ProductPrices = Pick<
+  Product,
+  "salePrice" | "memberPrice" | "staffPrice" | "memberDiscount" | "staffDiscount"
+>;
 
 /** The pharmacy's rules for products without their own member or staff price: percent off the regular price. */
 export type PriceRules = Pick<Pharmacy, "memberDiscount" | "staffDiscount">;
 
-const percentOff = (price: number, percent: number | null) =>
+export const percentOff = (price: number, percent: number | null) =>
   percent ? Math.round(price * (100 - percent)) / 100 : price;
 
 /**
  * What one unit costs at `level`: the product's own member or staff price,
- * otherwise the pharmacy's rule for that level applied to the regular price,
- * otherwise the regular price.
+ * otherwise its own percent off the regular price, otherwise the pharmacy's
+ * rule for that level, otherwise the regular price.
  */
 export function priceFor(product: ProductPrices, level: PriceLevel, rules: PriceRules): number {
-  if (level === "member") return product.memberPrice ?? percentOff(product.salePrice, rules.memberDiscount);
-  if (level === "staff") return product.staffPrice ?? percentOff(product.salePrice, rules.staffDiscount);
+  if (level === "member") {
+    return product.memberPrice ?? percentOff(product.salePrice, product.memberDiscount ?? rules.memberDiscount);
+  }
+  if (level === "staff") {
+    return product.staffPrice ?? percentOff(product.salePrice, product.staffDiscount ?? rules.staffDiscount);
+  }
   return product.salePrice;
 }
 

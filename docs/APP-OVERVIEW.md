@@ -125,7 +125,7 @@ Full sales history with receipts. A sale can be **refunded**, which returns its 
 - **Refill reminders:** reminders for a customer's regular medicine, with due dates. Each new sale of that medicine to the customer moves the reminder forward automatically.
 
 ### Products
-Medicines and other items with categories, cost price, barcode, reorder level and a prescription-only flag. Each product can have **several photos**, one of them the main photo shown in the product list and on the POS tiles. Each product has **three selling prices**: Regular, Member and Staff; a blank Member or Staff price means the Regular price. Bulk import has columns for all three. Products can be archived and restored.
+Medicines and other items with categories, cost price, barcode, reorder level and a prescription-only flag. Each product can have **several photos**, one of them the main photo shown in the product list and on the POS tiles. Each product has **three selling prices**: Regular, Member and Staff. The Member and Staff price can each be entered as a **price** or as a **% off the regular price** (which follows the regular price when it changes); the form shows the price it comes to. A blank Member or Staff price uses the rule in Settings, or the Regular price. Bulk import has columns for all three. Products can be archived and restored.
 
 ### Stock
 - Stock by **batch**, with batch number and **expiry date**.

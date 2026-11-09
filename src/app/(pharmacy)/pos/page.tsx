@@ -33,6 +33,8 @@ export default async function PosPage() {
         salePrice: products.salePrice,
         memberPrice: products.memberPrice,
         staffPrice: products.staffPrice,
+        memberDiscount: products.memberDiscount,
+        staffDiscount: products.staffDiscount,
         requiresPrescription: products.requiresPrescription,
         categoryId: products.categoryId,
       })
