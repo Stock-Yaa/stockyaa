@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { useFormAction } from "@/components/ui/use-form-action";
-import type { PAY_IN_CATEGORIES as PayIn, PAY_OUT_CATEGORIES as PayOut } from "@/db/schema";
+import type { PAY_IN_CATEGORIES as PayIn } from "@/db/schema";
 import { useT } from "@/i18n/client";
 import { shrinkPhoto } from "@/lib/shrink-photo";
 import { cn } from "@/lib/utils";
@@ -22,7 +22,6 @@ import { CashCounter, PinInput } from "./cash-inputs";
 
 // The schema's lists, without bundling the schema into the browser.
 const PAY_IN_CATEGORIES = ["float_topup", "other"] as const satisfies typeof PayIn;
-const PAY_OUT_CATEGORIES = ["supplies", "transport", "cleaning", "other"] as const satisfies typeof PayOut;
 
 function Footer({ pending, onCancel, label }: { pending: boolean; onCancel: () => void; label: string }) {
   const t = useT();
@@ -106,15 +105,21 @@ export function PayInButton({ shiftId, compact }: { shiftId: string; compact?: b
 
 export type ManagerOption = { id: string; name: string; hasPin: boolean };
 
+/** An expense category a pay-out can be booked under. */
+export type PayoutCategory = { id: string; name: string };
+
 export function PayOutButton({
   shiftId,
   approvalLimit,
   managers,
+  categories,
   compact,
 }: {
   shiftId: string;
   approvalLimit: number;
   managers: ManagerOption[];
+  /** The pharmacy's expense categories: a pay-out is also an expense. */
+  categories: PayoutCategory[];
   compact?: boolean;
 }) {
   const t = useT();
@@ -155,11 +160,17 @@ export function PayOutButton({
       >
         <form onSubmit={onSubmit} className="grid gap-4">
           <input type="hidden" name="shiftId" value={shiftId} />
-          <Field label={t("cashDrawer.category")} htmlFor="category" error={errors.category} required>
-            <Select id="category" name="category" defaultValue="supplies">
-              {PAY_OUT_CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {t(`cashDrawer.payOut_${c}`)}
+          <Field
+            label={t("cashDrawer.category")}
+            htmlFor="categoryId"
+            error={errors.categoryId}
+            hint={t("cashDrawer.payOutCategoryHint")}
+            required
+          >
+            <Select id="categoryId" name="categoryId" defaultValue={categories[0]?.id} required>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
                 </option>
               ))}
             </Select>

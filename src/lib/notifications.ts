@@ -36,8 +36,8 @@ const KEEP_READ_DAYS = 90;
 /** Types that concern the whole pharmacy rather than one branch. */
 export const PHARMACY_WIDE_TYPES: NotificationType[] = ["subscription_ended", "subscription_ending"];
 const STOCK_TYPES: NotificationType[] = ["out_of_stock", "low_stock", "expired", "expiring"];
-/** Types only admins see; created by the code that raises them, not by the scan. */
-const MANAGER_TYPES: NotificationType[] = ["cash_review"];
+/** Types only managers and admins see; created by the code that raises them, not by the scan. */
+const MANAGER_TYPES: NotificationType[] = ["cash_review", "price_discount"];
 
 type NewNotification = typeof notifications.$inferInsert;
 
@@ -173,15 +173,17 @@ export type NotificationViewer = {
 
 /**
  * The notifications a user may see and mark read: admins see the whole
- * pharmacy; staff see their own branch's alerts and the pharmacy-wide ones.
+ * pharmacy; managers and staff see their own branch's alerts and the
+ * pharmacy-wide ones, and only managers their branch's cash reviews and
+ * discount flags.
  */
 export function visibleNotifications({ user, pharmacy, branch }: NotificationViewer): SQL {
   const mine = eq(notifications.pharmacyId, pharmacy.id);
   if (canSwitchBranch(user)) return mine;
   return and(
     mine,
-    // Cash drawer reviews are for managers.
-    notInArray(notifications.type, MANAGER_TYPES),
+    // Cash reviews and discount flags are for managers (of their own branch, below).
+    user.role === "manager" ? undefined : notInArray(notifications.type, MANAGER_TYPES),
     or(
       eq(notifications.branchId, branch.id),
       // Only subscription types: a stock alert without a branch predates

@@ -70,6 +70,8 @@ const pos = {
   taxReceiptIssued: "Tax receipt {number}",
   printTaxReceipt: "Print tax receipt",
   taxBuyerInvalid: "The tax receipt details are incomplete. Check the buyer's name, 13-digit tax ID and address.",
+  discountOnLevel: "A discount on top of this customer's price level is flagged to the manager.",
+  vatIncluded: "Includes VAT {rate}%: {amount}",
 };
 
 export default pos;

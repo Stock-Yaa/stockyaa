@@ -54,6 +54,8 @@ const expenses: typeof en = {
   colorOrange: "ส้ม",
   colorBlue: "น้ำเงิน",
   colorGray: "เทา",
+  fromDrawer: "ค่าใช้จ่ายนี้มาจากการจ่ายออกจากลิ้นชักเงินสด จึงแก้ไขที่นี่ไม่ได้",
+  fromDrawerBadge: "ลิ้นชักเงินสด",
 };
 
 export default expenses;

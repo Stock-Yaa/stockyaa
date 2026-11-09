@@ -38,6 +38,11 @@ const branches = {
   noBranchTitle: "No branch assigned",
   noBranchBody:
     "Your account is not assigned to an active branch. Ask your pharmacy admin to assign you to one.",
+  code: "Code in document numbers",
+  codeHint: "Up to 6 letters or digits, e.g. SKV. Needed when each branch has its own document numbers.",
+  codeRequired: "Each branch has its own document numbers: give this branch a code.",
+  codeTaken: "Another branch already uses this code.",
+  codeInvalid: "Use up to 6 letters (A–Z) or digits.",
 };
 
 export default branches;

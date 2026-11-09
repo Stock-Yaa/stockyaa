@@ -70,6 +70,8 @@ const pos: typeof en = {
   taxReceiptIssued: "ใบกำกับภาษี {number}",
   printTaxReceipt: "พิมพ์ใบกำกับภาษี",
   taxBuyerInvalid: "ข้อมูลใบกำกับภาษีไม่ครบ ตรวจสอบชื่อผู้ซื้อ เลขผู้เสียภาษี 13 หลัก และที่อยู่",
+  discountOnLevel: "ส่วนลดเพิ่มจากระดับราคาของลูกค้าจะแจ้งให้ผู้จัดการทราบ",
+  vatIncluded: "รวมภาษีมูลค่าเพิ่ม {rate}%: {amount}",
 };
 
 export default pos;

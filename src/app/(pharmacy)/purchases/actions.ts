@@ -17,6 +17,7 @@ import { getT } from "@/i18n/server";
 import { fieldErrorsFrom, type ActionState } from "@/lib/action";
 import { branchChanged } from "@/lib/active-branch";
 import { requirePharmacy } from "@/lib/auth";
+import { todayInTimezone } from "@/lib/dates";
 import { branchScope, inScope } from "@/lib/branches";
 import { addBatch, nextPurchaseReference } from "@/lib/stock";
 import { round2 } from "@/lib/utils";
@@ -134,7 +135,7 @@ export async function createPurchase(formData: FormData): Promise<ActionState> {
   if (Object.keys(fieldErrors).length > 0) return { ok: false, fieldErrors };
 
   const purchaseId = await db.transaction(async (tx) => {
-    const reference = await nextPurchaseReference(tx, pharmacy.id);
+    const reference = await nextPurchaseReference(tx, pharmacy.id, todayInTimezone(pharmacy.timezone), branch.id);
     const [purchase] = await tx
       .insert(purchases)
       .values({

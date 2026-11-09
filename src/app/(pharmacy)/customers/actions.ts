@@ -9,7 +9,8 @@ import type { MessageKey } from "@/i18n/messages";
 import { getT } from "@/i18n/server";
 import { fieldErrorsFrom, type ActionState } from "@/lib/action";
 import { requirePharmacy } from "@/lib/auth";
-import { customerTaxFields } from "@/lib/tax-invoice";
+import { normaliseBuyerId } from "@/lib/buyer-id";
+import { customerTaxFields, refineCustomerTaxId } from "@/lib/tax-invoice";
 import {
   formToObject,
   optionalEmail,
@@ -19,16 +20,24 @@ import {
   requiredText,
 } from "@/lib/validation";
 
-const customerSchema = z.object({
-  id: optionalId,
-  name: requiredText(),
-  phone: optionalText(50),
-  email: optionalEmail,
-  address: optionalText(),
-  notes: optionalText(),
-  priceLevel: z.enum(PRICE_LEVELS, { error: "common.invalidChoice" }).default("regular"),
-  ...customerTaxFields,
-});
+const customerSchema = z
+  .object({
+    id: optionalId,
+    name: requiredText(),
+    phone: optionalText(50),
+    email: optionalEmail,
+    address: optionalText(),
+    notes: optionalText(),
+    priceLevel: z.enum(PRICE_LEVELS, { error: "common.invalidChoice" }).default("regular"),
+    ...customerTaxFields,
+  })
+  .superRefine(refineCustomerTaxId)
+  .transform((v) => ({
+    ...v,
+    taxId: v.taxId === null ? null : normaliseBuyerId(v.taxId, v.taxIdType),
+    // A passport holder has no Thai branch.
+    taxBranch: v.taxIdType === "passport" ? null : v.taxBranch,
+  }));
 
 /** Creates a customer, or updates it when the form carries an `id`. */
 export async function saveCustomer(formData: FormData): Promise<ActionState> {

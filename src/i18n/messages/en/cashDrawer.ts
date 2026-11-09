@@ -25,7 +25,7 @@ const cashDrawer = {
   pinLocked: "Too many wrong PINs. Try again in 15 minutes or ask a manager to set a new one.",
   pinNotSet: "This person has no PIN yet. Set one in Users or on their profile.",
   pinUserNotFound: "This person cannot use this drawer.",
-  managerOnly: "Only a manager (admin) can approve this.",
+  managerOnly: "Only a manager or an admin can do this.",
 
   // Opening
   openTitle: "Open shift",
@@ -150,7 +150,7 @@ const cashDrawer = {
   reasonExample: "e.g. gave wrong change to a customer at 14:10",
   reasonRequired: "Explain the difference.",
   closingDrop: "Take to safe now",
-  closingDropHint: "Float to keep: {float}. Left in the drawer: {left}.",
+  closingDropHint: "Optional. Whatever stays ({left}) is counted by the next shift.",
   dropTooLarge: "You cannot take more than was counted.",
   willReview: "This shift will go to the manager's review queue.",
   willBlock: "The manager will be notified and this drawer stays blocked until they decide.",
@@ -236,8 +236,6 @@ const cashDrawer = {
   editDrawer: "Edit drawer",
   drawerNameHint: "e.g. Drawer 2: consult desk",
   drawerNameTaken: "This branch already has a drawer with this name.",
-  floatAmount: "Float",
-  floatAmountHint: "Change the drawer keeps between shifts; the rest goes to the safe at closing.",
   currentSession: "Current session",
   noSession: "Closed",
   deactivate: "Deactivate",
@@ -249,6 +247,10 @@ const cashDrawer = {
   drawerInUse: "Close this drawer's session first.",
   drawerActivated: "Drawer activated",
   drawerDeactivated: "Drawer deactivated",
+  payOutCategoryHint: "Pay-outs are also recorded as expenses in this category.",
+  rejectedPayouts: "Rejected pay-outs (last {days} days)",
+  rejectedTitle: "{name}: {count} rejected pay-out(s)",
+  rejectedTotal: "Total {amount}, recorded against this person",
 };
 
 export default cashDrawer;

@@ -6,6 +6,8 @@ import {
   cashMovements,
   cashReviews,
   cashShifts,
+  expenseCategories,
+  expenses,
   notifications,
   sales,
   users,
@@ -314,6 +316,8 @@ export type ShiftActivity = {
   /** Invoice number for sales and refunds, the reason for the rest. */
   label: string;
   category: string | null;
+  /** Pay-outs: the expense category they were booked under. */
+  categoryName: string | null;
   bagNumber: string | null;
   saleId: string | null;
   movementId: string | null;
@@ -363,15 +367,18 @@ export async function getShiftActivity(
         receiptPath: cashMovements.receiptPath,
         at: cashMovements.createdAt,
         userName: users.name,
+        categoryName: expenseCategories.name,
       })
       .from(cashMovements)
       .leftJoin(users, eq(users.id, cashMovements.userId))
+      .leftJoin(expenses, eq(expenses.id, cashMovements.expenseId))
+      .leftJoin(expenseCategories, eq(expenseCategories.id, expenses.categoryId))
       .where(movementsOf(shift))
       .orderBy(desc(cashMovements.createdAt))
       .limit(limit),
   ]);
 
-  const base = { category: null, bagNumber: null, movementId: null, hasReceipt: false };
+  const base = { category: null, categoryName: null, bagNumber: null, movementId: null, hasReceipt: false };
   const rows: ShiftActivity[] = [
     ...sold.map((s) => ({
       ...base,
@@ -401,6 +408,7 @@ export async function getShiftActivity(
       at: m.at,
       label: m.reason,
       category: m.category,
+      categoryName: m.categoryName,
       bagNumber: m.bagNumber,
       saleId: null,
       movementId: m.id,
@@ -461,4 +469,28 @@ export async function createCashReview(
       },
     })
     .onConflictDoNothing({ target: [notifications.pharmacyId, notifications.key] });
+}
+
+/**
+ * The expense categories a pay-out can be booked under. A pharmacy without
+ * any gets the usual petty-cash ones (named in `names`, the user's language).
+ */
+export async function payoutCategories(
+  db: DbOrTx,
+  pharmacyId: string,
+  names: string[],
+): Promise<{ id: string; name: string }[]> {
+  const list = () =>
+    db
+      .select({ id: expenseCategories.id, name: expenseCategories.name })
+      .from(expenseCategories)
+      .where(eq(expenseCategories.pharmacyId, pharmacyId))
+      .orderBy(asc(expenseCategories.name));
+  const found = await list();
+  if (found.length > 0) return found;
+  await db
+    .insert(expenseCategories)
+    .values(names.map((name) => ({ pharmacyId, name, color: "gray" as const })))
+    .onConflictDoNothing();
+  return list();
 }

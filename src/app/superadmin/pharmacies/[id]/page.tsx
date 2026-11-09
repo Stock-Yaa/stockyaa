@@ -61,7 +61,7 @@ export default async function PharmacyDetailPage({
   const state = subscriptionState(pharmacy, now());
   const branchLimit = plan?.maxBranches ?? 1;
   const roleLabel = (role: string) =>
-    role === "admin" ? t("nav.pharmacyAdmin") : t("nav.staff");
+    role === "admin" ? t("nav.pharmacyAdmin") : role === "manager" ? t("users.roleManager") : t("nav.staff");
 
   return (
     <>

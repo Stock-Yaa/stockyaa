@@ -121,7 +121,7 @@ export function PosTerminal({
   const t = useT();
   const f = useFormat();
   const router = useRouter();
-  const { taxRate, branch } = usePharmacy();
+  const { vatRate, priceRules, branch } = usePharmacy();
   const searchRef = useRef<HTMLInputElement>(null);
 
   const [query, setQuery] = useState("");
@@ -173,7 +173,7 @@ export function PosTerminal({
     const product = productById.get(entry.productId);
     if (!product) return [];
     const quantity = Math.max(0, Math.min(entry.quantity, product.stock));
-    const unitPrice = priceFor(product, priceLevel);
+    const unitPrice = priceFor(product, priceLevel, priceRules);
     return [{ product, quantity, unitPrice, total: round2(quantity * unitPrice) }];
   });
   const quantityInCart = new Map(lines.map((line) => [line.product.id, line.quantity]));
@@ -184,7 +184,7 @@ export function PosTerminal({
   const totals = computeSaleTotals(
     lines.map((line) => ({ quantity: line.quantity, unitPrice: line.unitPrice })),
     parseAmount(discountInput),
-    taxRate,
+    vatRate,
   );
   const isCash = method === "cash";
   const received = parseAmount(receivedInput);
@@ -397,7 +397,7 @@ export function PosTerminal({
                   key={product.id}
                   product={product}
                   inCart={quantityInCart.get(product.id) ?? 0}
-                  price={priceFor(product, priceLevel)}
+                  price={priceFor(product, priceLevel, priceRules)}
                   onAdd={() => {
                     addProduct(product);
                     refocusSearch();
@@ -459,12 +459,17 @@ export function PosTerminal({
                   setShowDiscount(!discountShown);
                 },
               },
-              {
-                label: taxBuyer ? t("pos.editTaxReceipt") : t("pos.requestTaxReceipt"),
-                icon: FileText,
-                disabled: pending,
-                onSelect: () => setBuyerDraft(taxBuyer ?? buyerFrom(selectedCustomer)),
-              },
+              // Tax receipts need a VAT-registered pharmacy.
+              ...(vatRate > 0
+                ? [
+                    {
+                      label: taxBuyer ? t("pos.editTaxReceipt") : t("pos.requestTaxReceipt"),
+                      icon: FileText,
+                      disabled: pending,
+                      onSelect: () => setBuyerDraft(taxBuyer ?? buyerFrom(selectedCustomer)),
+                    },
+                  ]
+                : []),
               {
                 label: t("pos.clearCart"),
                 icon: Trash2,
@@ -613,13 +618,10 @@ export function PosTerminal({
             {totals.discount > 0 && (
               <SummaryRow label={t("pos.discount")} value={`−${f.money(totals.discount)}`} />
             )}
-            {taxRate > 0 && (
-              <SummaryRow
-                label={t("pos.tax", { rate: f.number(taxRate) })}
-                value={f.money(totals.tax)}
-              />
-            )}
           </dl>
+          {totals.discount > 0 && priceLevel !== "regular" && (
+            <p className="px-1 text-xs text-warning">{t("pos.discountOnLevel")}</p>
+          )}
 
           <div className="flex items-center justify-between gap-3 rounded-xl border border-primary/30 bg-accent px-4 py-3 text-accent-foreground">
             <span className="text-sm font-semibold tracking-wide uppercase">
@@ -629,6 +631,11 @@ export function PosTerminal({
               {f.money(totals.total)}
             </span>
           </div>
+          {vatRate > 0 && (
+            <p className="-mt-1 px-1 text-right text-xs text-muted-foreground tabular-nums">
+              {t("pos.vatIncluded", { rate: f.number(vatRate), amount: f.money(totals.tax) })}
+            </p>
+          )}
 
           {hasPrescription && (
             <div

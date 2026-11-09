@@ -35,6 +35,8 @@ const notifications: typeof en = {
   cashVarianceBlockedBody: "{staff} ปิดกะ {drawer} โดยยอดต่างไป {amount} ลิ้นชักถูกล็อกจนกว่าคุณจะตัดสินใจ",
   cashOpeningBody: "ยอดนับเปิดกะ {drawer} ของ {staff} ต่างจากเงินที่กะก่อนเหลือไว้ {amount}",
   cashPayoutBody: "{staff} จ่ายเงินออก {amount} จาก {drawer} เกินวงเงินที่ต้องอนุมัติ",
+  priceDiscountTitle: "ให้ส่วนลดเพิ่มจากราคา{level}",
+  priceDiscountBody: "{staff} ให้ส่วนลด {discount} ในบิล {invoice}",
 };
 
 export default notifications;

@@ -15,16 +15,8 @@ import {
   MAX_INVOICE_DIGITS,
   MAX_INVOICE_PREFIX,
   MIN_INVOICE_DIGITS,
-  formatInvoiceNumber,
-  invoicePeriod,
 } from "@/lib/invoice-number";
-import {
-  highestCounter,
-  resyncCounter,
-  seriesCounter,
-  seriesFormat,
-  type NumberSeries,
-} from "@/lib/numbering";
+import { NUMBER_SERIES, previewNumber, resyncCounters, type NumberSeries } from "@/lib/numbering";
 import { round2 } from "@/lib/utils";
 import {
   checkbox,
@@ -38,7 +30,14 @@ import {
 } from "@/lib/validation";
 import { CURRENCIES, TIMEZONES } from "@/lib/options";
 
-const profileSchema = z.object({
+// Blank = no rule; otherwise a percentage off the regular price.
+const optionalPercent = z.preprocess(
+  (v) => (v === "" || v === undefined || v === null ? null : v),
+  nonNegativeNumber.pipe(z.number().max(100, "settings.percentRange")).nullable(),
+);
+
+const profileSchema = z
+  .object({
   name: requiredText(),
   phone: optionalText(50),
   email: optionalEmail,
@@ -47,10 +46,19 @@ const profileSchema = z.object({
   taxId: optionalText(50),
   currency: z.enum(CURRENCIES, { error: "settings.invalidOption" }),
   timezone: z.enum(TIMEZONES, { error: "settings.invalidOption" }),
+  vatRegistered: checkbox,
   taxRate: nonNegativeNumber.pipe(z.number().max(100, "settings.taxRateRange")),
+  memberDiscount: optionalPercent,
+  staffDiscount: optionalPercent,
   expiryAlertDays: positiveInt.pipe(z.number().max(365, "settings.expiryAlertDaysRange")),
   receiptFooter: optionalText(500),
-});
+  })
+  // VAT receipts and tax receipts print the seller's tax ID and a rate.
+  .superRefine((v, ctx) => {
+    if (!v.vatRegistered) return;
+    if (!v.taxId) ctx.addIssue({ code: "custom", path: ["taxId"], message: "settings.taxIdRequiredForVat" });
+    if (v.taxRate <= 0) ctx.addIssue({ code: "custom", path: ["taxRate"], message: "settings.vatRateRequired" });
+  });
 
 const maxMoney = (v: number) => v <= 9_999_999_999.99;
 const cashRulesSchema = z
@@ -98,10 +106,21 @@ const prefixField = z.preprocess(
     .regex(INVOICE_PREFIX_PATTERN, "settings.invoicePrefixInvalid"),
 );
 
+const PREFIX_FIELDS = [
+  "invoicePrefix",
+  "taxInvoicePrefix",
+  "creditNotePrefix",
+  "purchasePrefix",
+  "transferPrefix",
+] as const;
+
 const invoiceFormatSchema = z
   .object({
     invoicePrefix: prefixField,
     taxInvoicePrefix: prefixField,
+    creditNotePrefix: prefixField,
+    purchasePrefix: prefixField,
+    transferPrefix: prefixField,
     invoiceDateFormat: z.enum(INVOICE_DATE_FORMATS, { error: "settings.invalidOption" }),
     invoiceBuddhistYear: checkbox,
     invoiceDigits: positiveInt.pipe(
@@ -110,73 +129,68 @@ const invoiceFormatSchema = z
         .min(MIN_INVOICE_DIGITS, "settings.invoiceDigitsRange")
         .max(MAX_INVOICE_DIGITS, "settings.invoiceDigitsRange"),
     ),
+    numberPerBranch: checkbox,
   })
-  // The same prefix would make both series issue the same numbers.
-  .refine((v) => v.taxInvoicePrefix !== v.invoicePrefix, {
-    path: ["taxInvoicePrefix"],
-    error: "settings.taxPrefixSame",
+  // Each series needs its own prefix, or two kinds of document would share numbers.
+  .superRefine((v, ctx) => {
+    PREFIX_FIELDS.forEach((field, index) => {
+      if (PREFIX_FIELDS.slice(0, index).some((earlier) => v[earlier] === v[field])) {
+        ctx.addIssue({ code: "custom", path: [field], message: "settings.prefixSame" });
+      }
+    });
   });
 
-const SERIES: NumberSeries[] = ["sale", "tax"];
-
 /**
- * The numbers the next sale and the next tax receipt would get with `draft`
- * as the format, for the live preview: they skip numbers already issued.
+ * The numbers the next document of each series in the current branch would
+ * get with `draft` as the format, for the live preview: they skip numbers
+ * already issued.
  */
-export async function previewDocumentNumbers(
-  draft: unknown,
-): Promise<{ sale: string; tax: string } | null> {
-  const { user, pharmacy } = await requirePharmacy();
+export async function previewDocumentNumbers(draft: unknown): Promise<Record<NumberSeries, string> | null> {
+  const { user, pharmacy, branch } = await requirePharmacy();
   if (user.role !== "admin") return null;
   const parsed = invoiceFormatSchema.safeParse(draft);
   if (!parsed.success) return null;
   const today = todayInTimezone(pharmacy.timezone);
   const db = await getDb();
-  const [sale, tax] = await Promise.all(
-    SERIES.map(async (series) => {
-      const format = seriesFormat(parsed.data, series);
-      const period = invoicePeriod(format, today);
-      const now = seriesCounter(pharmacy, series);
-      const same =
-        format.invoicePrefix === now.prefix &&
-        format.invoiceDigits === pharmacy.invoiceDigits &&
-        period === now.period;
-      const seq = same ? now.seq : await highestCounter(db, pharmacy.id, series, format, period);
-      return formatInvoiceNumber(format, period, seq + 1);
-    }),
+  const numbers = await Promise.all(
+    NUMBER_SERIES.map((series) => previewNumber(db, pharmacy, parsed.data, series, branch, today)),
   );
-  return { sale, tax };
+  return Object.fromEntries(NUMBER_SERIES.map((series, i) => [series, numbers[i]])) as Record<NumberSeries, string>;
 }
 
 /**
- * Sets how new invoice and tax receipt numbers look. Numbers already issued
- * stay as they are; each counter carries on, or restarts at 1 when the date
- * part is new.
+ * Sets how new document numbers look. Numbers already issued stay as they
+ * are; each counter carries on, or restarts at 1 when the date part is new.
+ * Numbers per branch need a code on every active branch.
  */
 export async function updateInvoiceFormat(formData: FormData): Promise<ActionState> {
-  const { user, pharmacy } = await requirePharmacy();
+  const { user, pharmacy, branches: active } = await requirePharmacy();
   const t = await getT();
   if (user.role !== "admin") return { ok: false, message: t("settings.adminOnly") };
   const parsed = invoiceFormatSchema.safeParse(formToObject(formData));
   if (!parsed.success) {
     return { ok: false, fieldErrors: fieldErrorsFrom(parsed.error, (m) => t(m as MessageKey)) };
   }
+  if (parsed.data.numberPerBranch) {
+    const withoutCode = active.filter((b) => !b.code);
+    if (withoutCode.length > 0) {
+      return {
+        ok: false,
+        fieldErrors: {
+          numberPerBranch: t("settings.branchCodesMissing", { names: withoutCode.map((b) => b.name).join(", ") }),
+        },
+      };
+    }
+  }
   const today = todayInTimezone(pharmacy.timezone);
   const db = await getDb();
   await db.transaction(async (tx) => {
+    // Lock first, so no document takes a number while the counters move.
+    await tx.select({ id: pharmacies.id }).from(pharmacies).where(eq(pharmacies.id, pharmacy.id)).for("update");
     await tx.update(pharmacies).set(parsed.data).where(eq(pharmacies.id, pharmacy.id));
     // Continue after the highest number each format already issued in today's
     // date part, so switching back to an earlier format never repeats one.
-    for (const series of SERIES) {
-      const format = seriesFormat(parsed.data, series);
-      const period = invoicePeriod(format, today);
-      const now = seriesCounter(pharmacy, series);
-      const changed =
-        format.invoicePrefix !== now.prefix ||
-        format.invoiceDigits !== pharmacy.invoiceDigits ||
-        period !== now.period;
-      if (changed) await resyncCounter(tx, pharmacy.id, series, format, period);
-    }
+    await resyncCounters(tx, pharmacy, parsed.data, active, today);
   });
   revalidatePath("/settings");
   return { ok: true, message: t("settings.invoiceFormatSaved") };
@@ -199,7 +213,12 @@ export async function updatePharmacyProfile(formData: FormData): Promise<ActionS
   const db = await getDb();
   await db
     .update(pharmacies)
-    .set({ ...parsed.data, taxRate: round2(parsed.data.taxRate) })
+    .set({
+      ...parsed.data,
+      taxRate: round2(parsed.data.taxRate),
+      memberDiscount: parsed.data.memberDiscount === null ? null : round2(parsed.data.memberDiscount),
+      staffDiscount: parsed.data.staffDiscount === null ? null : round2(parsed.data.staffDiscount),
+    })
     .where(eq(pharmacies.id, pharmacy.id));
 
   // The shell shows the pharmacy name and every page formats with its currency.

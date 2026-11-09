@@ -13,6 +13,7 @@ import { listBranches } from "@/lib/branches";
 import type { Format } from "@/lib/format";
 import { getFormat } from "@/lib/format-server";
 import { pageTitle } from "@/lib/metadata";
+import { PRICE_LEVEL_LABEL } from "@/lib/price-labels";
 import { visibleNotifications } from "@/lib/notifications";
 import { pageCountOf, parsePage } from "@/lib/pagination";
 import { now } from "@/lib/time";
@@ -26,6 +27,7 @@ const PER_PAGE = 30;
 const URGENCY_ORDER: NotificationType[] = [
   "subscription_ended",
   "cash_review",
+  "price_discount",
   "out_of_stock",
   "expired",
   "low_stock",
@@ -74,6 +76,12 @@ const TEXT: Record<NotificationType, { title: MessageKey; body: MessageKey; href
     body: "notifications.cashVarianceBody",
     href: "/cash-drawer?tab=review",
   },
+  // Links to the sale itself (see describe).
+  price_discount: {
+    title: "notifications.priceDiscountTitle",
+    body: "notifications.priceDiscountBody",
+    href: "/sales",
+  },
 };
 
 const CASH_REVIEW_BODY: Record<string, MessageKey> = {
@@ -110,6 +118,17 @@ function describe(n: Notification, t: Translate, f: Format) {
     };
     const kind = d.kind === "variance" && d.blocking === 1 ? "variance_blocked" : String(d.kind);
     return { title: t(text.title), body: t(CASH_REVIEW_BODY[kind] ?? text.body, cash), href: text.href };
+  }
+  if (n.type === "price_discount") {
+    const level = d.level === "member" || d.level === "staff" ? d.level : "regular";
+    const discount = {
+      level: t(PRICE_LEVEL_LABEL[level]),
+      staff: String(d.staff ?? ""),
+      invoice: String(d.invoice ?? ""),
+      discount: f.money(Number(d.discount ?? 0)),
+    };
+    const href = typeof d.saleId === "string" ? `/sales/${d.saleId}` : text.href;
+    return { title: t(text.title, discount), body: t(text.body, discount), href };
   }
   return { title: t(text.title, vars), body: t(text.body, vars), href: text.href };
 }

@@ -50,6 +50,10 @@ const sales: typeof en = {
   refundBodyCash: "คืนเงินสดจาก {drawer} และสินค้าทุกรายการจะกลับเข้าสต็อก",
   refundNeedsDrawer: "เปิดลิ้นชักเก็บเงินของเครื่องนี้ก่อนคืนเงินบิลเงินสด",
   priceLevel: "ระดับราคา",
+  abbTaxInvoice: "ใบกำกับภาษีอย่างย่อ",
+  beforeVat: "มูลค่าสินค้าก่อนภาษี",
+  vatIncluded: "ภาษีมูลค่าเพิ่ม {rate}% (รวมในราคาแล้ว)",
+  refundedWithCredit: "คืนเงินแล้ว ออกใบลดหนี้ {number}",
 };
 
 export default sales;

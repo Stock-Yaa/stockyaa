@@ -8,7 +8,7 @@ import { EmptyState, PageHeader } from "@/components/ui/page";
 import { ConfirmButton } from "@/components/ui/confirm-button";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/table";
 import { getDb } from "@/db";
-import { expenseCategories, expenses, users } from "@/db/schema";
+import { cashMovements, expenseCategories, expenses, users } from "@/db/schema";
 import { getT } from "@/i18n/server";
 import { requirePharmacy } from "@/lib/auth";
 import { todayInTimezone } from "@/lib/dates";
@@ -82,6 +82,8 @@ export default async function ExpensesPage({
         amount: expenses.amount,
         description: expenses.description,
         recordedBy: users.name,
+        // Booked by a cash drawer pay-out: changed only through the drawer.
+        fromDrawer: sql<boolean>`exists (select 1 from ${cashMovements} where ${cashMovements.expenseId} = ${expenses.id})`,
       })
       .from(expenses)
       .leftJoin(users, eq(users.id, expenses.userId))
@@ -246,12 +248,18 @@ export default async function ExpensesPage({
                           {t("expenses.wholeBusiness")}
                         </Badge>
                       )}
+                      {expense.fromDrawer && (
+                        <Badge tone="muted" className="ml-2 whitespace-nowrap">
+                          {t("expenses.fromDrawerBadge")}
+                        </Badge>
+                      )}
                     </TD>
                     <TD className="text-right font-semibold whitespace-nowrap tabular-nums">
                       {f.money(expense.amount)}
                     </TD>
                     <TD className="text-muted-foreground">{expense.recordedBy ?? "—"}</TD>
                     <TD className="print:hidden">
+                      {expense.fromDrawer ? null : (
                       <div className="flex justify-end gap-1">
                         <ExpenseFormButton
                           expense={expense}
@@ -269,6 +277,7 @@ export default async function ExpensesPage({
                           <Trash2 />
                         </ConfirmButton>
                       </div>
+                      )}
                     </TD>
                   </TR>
                 );

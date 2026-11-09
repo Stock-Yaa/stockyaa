@@ -48,6 +48,10 @@ const sales = {
   refundBodyCash: "The cash is paid back from {drawer} and every item returns to stock.",
   refundNeedsDrawer: "Open this till's cash drawer to refund a cash sale.",
   priceLevel: "Price level",
+  abbTaxInvoice: "ใบกำกับภาษีอย่างย่อ / Tax invoice (abbreviated)",
+  beforeVat: "Amount before VAT",
+  vatIncluded: "VAT {rate}% (included)",
+  refundedWithCredit: "Sale refunded; credit note {number} issued",
 };
 
 export default sales;

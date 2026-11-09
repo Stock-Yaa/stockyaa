@@ -38,7 +38,6 @@ export async function DrawersTab({ ctx }: { ctx: Ctx }) {
         <THead>
           <tr>
             <TH>{t("common.name")}</TH>
-            <TH className="text-right">{t("cashDrawer.floatAmount")}</TH>
             <TH>{t("cashDrawer.currentSession")}</TH>
             <TH>{t("common.status")}</TH>
             <TH className="text-right">{t("common.actions")}</TH>
@@ -50,7 +49,6 @@ export async function DrawersTab({ ctx }: { ctx: Ctx }) {
             return (
               <TR key={drawer.id}>
                 <TD className="font-medium">{drawer.name}</TD>
-                <TD className="text-right tabular-nums">{f.money(drawer.floatAmount)}</TD>
                 <TD>
                   {session ? (
                     <span>
@@ -71,7 +69,7 @@ export async function DrawersTab({ ctx }: { ctx: Ctx }) {
                 <TD>
                   <div className="flex justify-end gap-1">
                     <DrawerFormButton
-                      drawer={{ id: drawer.id, name: drawer.name, floatAmount: drawer.floatAmount }}
+                      drawer={{ id: drawer.id, name: drawer.name }}
                     />
                     {drawer.isActive ? (
                       <ConfirmButton

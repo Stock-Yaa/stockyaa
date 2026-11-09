@@ -13,7 +13,7 @@ export type UserRow = {
   id: string;
   name: string;
   email: string;
-  role: "admin" | "staff";
+  role: "admin" | "manager" | "staff";
   branchId: string | null;
 };
 
@@ -89,12 +89,13 @@ function UserForm({
           disabled={isSelf}
         >
           <option value="staff">{t("users.roleStaff")}</option>
+          <option value="manager">{t("users.roleManager")}</option>
           <option value="admin" disabled={!canAddAdmin}>
             {t("users.roleAdmin")}
           </option>
         </Select>
       </Field>
-      {role === "staff" && (
+      {role !== "admin" && (
         <Field
           label={t("users.branch")}
           htmlFor="user-branch"

@@ -30,19 +30,22 @@ export type SaleTotals = {
   subtotal: number;
   /** Discount actually applied: never negative, never more than the subtotal. */
   discount: number;
+  /** The VAT inside the total (prices include VAT). */
   tax: number;
   total: number;
 };
 
 /**
  * Totals of a sale. The POS screen uses this for display and createSale uses
- * it as the source of truth, so the two always agree. `taxRate` is a
- * percentage charged on the subtotal after discount.
+ * it as the source of truth, so the two always agree. Prices include VAT:
+ * the total is the subtotal after discount, and `vatRate` (a percentage, 0
+ * when the pharmacy is not VAT-registered; see vatRateOf) gives the VAT
+ * contained in it.
  */
 export function computeSaleTotals(
   lines: { quantity: number; unitPrice: number }[],
   discount: number,
-  taxRate: number,
+  vatRate: number,
 ): SaleTotals {
   const subtotal = round2(
     lines.reduce((sum, line) => sum + round2(line.quantity * line.unitPrice), 0),
@@ -50,7 +53,7 @@ export function computeSaleTotals(
   const applied = Number.isFinite(discount)
     ? Math.min(Math.max(round2(discount), 0), subtotal)
     : 0;
-  const taxable = round2(subtotal - applied);
-  const tax = round2((taxable * taxRate) / 100);
-  return { subtotal, discount: applied, tax, total: round2(taxable + tax) };
+  const total = round2(subtotal - applied);
+  const tax = vatRate > 0 ? round2((total * vatRate) / (100 + vatRate)) : 0;
+  return { subtotal, discount: applied, tax, total };
 }

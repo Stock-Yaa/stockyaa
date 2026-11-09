@@ -1,10 +1,10 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, or, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { categories, customers, products, users } from "@/db/schema";
 import { getT } from "@/i18n/server";
 import { requirePharmacy } from "@/lib/auth";
 import { branchScope } from "@/lib/branches";
-import { getDrawerState } from "@/lib/cash-drawer";
+import { getDrawerState, payoutCategories } from "@/lib/cash-drawer";
 import { mainPhotos } from "@/lib/product-images";
 import { addDays, todayInTimezone } from "@/lib/dates";
 import { getFormat } from "@/lib/format-server";
@@ -47,6 +47,7 @@ export default async function PosPage() {
         name: customers.name,
         phone: customers.phone,
         priceLevel: customers.priceLevel,
+        taxIdType: customers.taxIdType,
         taxId: customers.taxId,
         taxBranch: customers.taxBranch,
         address: customers.address,
@@ -64,7 +65,13 @@ export default async function PosPage() {
     db
       .select({ id: users.id, name: users.name, hasPin: sql<boolean>`${users.pinHash} is not null` })
       .from(users)
-      .where(and(eq(users.pharmacyId, pharmacy.id), eq(users.role, "admin"), eq(users.isActive, true)))
+      .where(
+        and(
+          eq(users.pharmacyId, pharmacy.id),
+          eq(users.isActive, true),
+          or(eq(users.role, "admin"), and(eq(users.role, "manager"), eq(users.branchId, branch.id))),
+        ),
+      )
       .orderBy(asc(users.name)),
     mainPhotos(db, pharmacy.id),
   ]);
@@ -75,11 +82,20 @@ export default async function PosPage() {
   const cashShiftId =
     drawer.shift && drawer.shift.countAttempts.length === 0 ? drawer.shift.id : null;
 
+  // Expense categories a pay-out can be booked under.
+  const payoutCats = await payoutCategories(db, pharmacy.id, [
+    t("cashDrawer.payOut_supplies"),
+    t("cashDrawer.payOut_transport"),
+    t("cashDrawer.payOut_cleaning"),
+    t("cashDrawer.payOut_other"),
+  ]);
+
   return (
     <>
     <DrawerBar
       state={drawer}
       managers={managers}
+      categories={payoutCats}
       approvalLimit={pharmacy.payoutApprovalLimit}
       t={t}
       f={f}

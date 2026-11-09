@@ -51,6 +51,7 @@ const users: typeof en = {
   pinMismatch: "PIN ไม่ตรงกัน",
   myPinTitle: "PIN ลิ้นชักเก็บเงิน",
   myPinDescription: "ใช้ PIN นี้เพื่อเปิด นับ และปิดกะลิ้นชักเก็บเงิน และเพื่ออนุมัติในฐานะผู้จัดการ",
+  roleManager: "ผู้จัดการ",
 };
 
 export default users;

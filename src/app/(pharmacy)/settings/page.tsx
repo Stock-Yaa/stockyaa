@@ -5,7 +5,8 @@ import { requirePharmacy } from "@/lib/auth";
 import { pageTitle } from "@/lib/metadata";
 import { currencyOptions, timezoneOptions } from "@/lib/options";
 import { todayInTimezone } from "@/lib/dates";
-import { seriesCounter } from "@/lib/numbering";
+import { getDb } from "@/db";
+import { NUMBER_SERIES, branchCodeOf, counterScope, getCounter, seriesFormat } from "@/lib/numbering";
 import { CashRulesForm } from "./cash-rules-form";
 import { InvoiceFormatForm } from "./invoice-format-form";
 import { ProfileForm } from "./profile-form";
@@ -13,9 +14,22 @@ import { ProfileForm } from "./profile-form";
 export const generateMetadata = pageTitle("settings.title");
 
 export default async function SettingsPage() {
-  const { user, pharmacy } = await requirePharmacy();
+  const { user, pharmacy, branch, branches } = await requirePharmacy();
   const t = await getT();
   const locale = await getLocale();
+  const db = await getDb();
+  // Where each document counter of the current branch is, for the number preview.
+  const counters = Object.fromEntries(
+    await Promise.all(
+      NUMBER_SERIES.map(async (series) => [
+        series,
+        {
+          ...(await getCounter(db, pharmacy.id, series, counterScope(pharmacy, branch))),
+          prefix: seriesFormat(pharmacy, series, branch).invoicePrefix,
+        },
+      ]),
+    ),
+  );
 
   return (
     <>
@@ -40,7 +54,10 @@ export default async function SettingsPage() {
                 taxId: pharmacy.taxId,
                 currency: pharmacy.currency,
                 timezone: pharmacy.timezone,
+                vatRegistered: pharmacy.vatRegistered,
                 taxRate: pharmacy.taxRate,
+                memberDiscount: pharmacy.memberDiscount,
+                staffDiscount: pharmacy.staffDiscount,
                 expiryAlertDays: pharmacy.expiryAlertDays,
                 receiptFooter: pharmacy.receiptFooter,
               }}
@@ -64,12 +81,18 @@ export default async function SettingsPage() {
               settings={{
                 invoicePrefix: pharmacy.invoicePrefix,
                 taxInvoicePrefix: pharmacy.taxInvoicePrefix,
+                creditNotePrefix: pharmacy.creditNotePrefix,
+                purchasePrefix: pharmacy.purchasePrefix,
+                transferPrefix: pharmacy.transferPrefix,
                 invoiceDateFormat: pharmacy.invoiceDateFormat,
                 invoiceBuddhistYear: pharmacy.invoiceBuddhistYear,
                 invoiceDigits: pharmacy.invoiceDigits,
+                numberPerBranch: pharmacy.numberPerBranch,
               }}
               today={todayInTimezone(pharmacy.timezone)}
-              counters={{ sale: seriesCounter(pharmacy, "sale"), tax: seriesCounter(pharmacy, "tax") }}
+              branchCode={branchCodeOf(branch)}
+              counters={counters as Parameters<typeof InvoiceFormatForm>[0]["counters"]}
+              showTransfers={branches.length > 1}
             />
           </CardContent>
         </Card>

@@ -92,6 +92,20 @@
       "when": 1794140448498,
       "tag": "0012_tax_receipts_product_photos",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1794207254065,
+      "tag": "0013_client_answers",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1794207258955,
+      "tag": "0014_drop_old_counters",
+      "breakpoints": true
     }
   ]
 }

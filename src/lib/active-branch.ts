@@ -5,8 +5,15 @@ import type { Branch, User } from "@/db/schema";
  * server actions. Query helpers live in ./branches.
  */
 
-/** Admins work in every branch and may switch between them; staff work in one. */
+/** Admins work in every branch and may switch between them; managers and staff work in one. */
 export const canSwitchBranch = (user: Pick<User, "role">) => user.role === "admin";
+
+/**
+ * Managers run the cash drawer (approve pay-outs, review counts, close
+ * forgotten sessions, manage drawers): admins in every branch, a manager in
+ * their own.
+ */
+export const isManager = (user: Pick<User, "role">) => user.role === "admin" || user.role === "manager";
 
 /**
  * Name of the hidden field useFormAction adds to every pharmacy form: the

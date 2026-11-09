@@ -11,6 +11,7 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 const money = (name: string) =>
@@ -20,7 +21,9 @@ const id = () => uuid("id").primaryKey().defaultRandom();
 const createdAt = () =>
   timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 
-export const USER_ROLES = ["superadmin", "admin", "staff"] as const;
+// A manager works in one branch like staff, and also runs its cash drawers:
+// approves pay-outs, reviews counts and closes forgotten sessions.
+export const USER_ROLES = ["superadmin", "admin", "manager", "staff"] as const;
 export const PHARMACY_STATUSES = ["active", "suspended"] as const;
 export const SUBSCRIPTION_STATUSES = ["trial", "active", "cancelled"] as const;
 // Standard: one branch and one admin. Multi branch: up to maxBranches
@@ -32,6 +35,11 @@ export const PAYMENT_METHODS = ["cash", "card", "transfer"] as const;
 // Selling price levels: every product has a regular price and may have a
 // member and a staff price; a customer's level decides which one they pay.
 export const PRICE_LEVELS = ["regular", "member", "staff"] as const;
+// Running document numbers (see src/lib/numbering.ts), each with its own counter.
+export const DOCUMENT_SERIES = ["sale", "tax", "credit", "purchase", "transfer"] as const;
+// What identifies the buyer of a full tax receipt: a 13-digit Thai tax ID, or
+// a passport number for a foreign buyer.
+export const BUYER_ID_TYPES = ["tax_id", "passport"] as const;
 // Date part of invoice numbers; the counter restarts whenever it changes.
 export const INVOICE_DATE_FORMATS = ["none", "YYYY", "YYYYMM", "YYYYMMDD", "YYMM", "YYMMDD"] as const;
 export const BILLING_METHODS = ["cash", "transfer", "stripe"] as const;
@@ -66,6 +74,7 @@ export const NOTIFICATION_TYPES = [
   "subscription_ended",
   "subscription_ending",
   "cash_review",
+  "price_discount",
 ] as const;
 export const MOVEMENT_TYPES = [
   "opening",
@@ -110,10 +119,17 @@ export const pharmacies = pgTable("pharmacies", {
   taxId: text("tax_id"),
   currency: text("currency").notNull().default("THB"),
   timezone: text("timezone").notNull().default("Asia/Bangkok"),
-  // Percentage added on top of the sale subtotal at the POS (0 = no tax line).
+  // Selling prices always include VAT. A VAT-registered pharmacy shows the VAT
+  // inside each sale (taxRate %) and can issue tax receipts; otherwise there
+  // is no VAT at all.
+  vatRegistered: boolean("vat_registered").notNull().default(false),
   taxRate: numeric("tax_rate", { precision: 5, scale: 2, mode: "number" })
     .notNull()
-    .default(0),
+    .default(7),
+  // Member and staff prices of products without their own: this many percent
+  // off the regular price (null = the regular price).
+  memberDiscount: numeric("member_discount", { precision: 5, scale: 2, mode: "number" }),
+  staffDiscount: numeric("staff_discount", { precision: 5, scale: 2, mode: "number" }),
   // Batches expiring within this many days are flagged as "expiring soon".
   expiryAlertDays: integer("expiry_alert_days").notNull().default(90),
   receiptFooter: text("receipt_footer"),
@@ -124,25 +140,22 @@ export const pharmacies = pgTable("pharmacies", {
     .default("trial"),
   // null = no end date.
   subscriptionEndsAt: timestamp("subscription_ends_at", { withTimezone: true }),
-  saleSeq: integer("sale_seq").notNull().default(0),
-  // Invoice number format (see src/lib/invoice-number.ts): prefix, an optional
-  // date part and the counter's digits, e.g. INV- + YYYYMM + 3 = INV-202611001.
-  // The counter restarts when the date part changes; invoiceSeqPeriod is the
-  // date part saleSeq is counting in ("" when there is none).
+  // Document number format (see src/lib/numbering.ts): a prefix per series,
+  // then a shared optional date part and counter digits, e.g. INV- + YYYYMM
+  // + 3 = INV-202611001. The counters live in document_counters and restart
+  // when the date part changes. With numberPerBranch each branch counts on
+  // its own and its code follows the prefix (INV-SKV-202611001).
   invoicePrefix: text("invoice_prefix").notNull().default("INV-"),
   invoiceDateFormat: text("invoice_date_format", { enum: INVOICE_DATE_FORMATS })
     .notNull()
     .default("none"),
   invoiceBuddhistYear: boolean("invoice_buddhist_year").notNull().default(false),
   invoiceDigits: integer("invoice_digits").notNull().default(6),
-  invoiceSeqPeriod: text("invoice_seq_period").notNull().default(""),
-  // Full tax receipts have their own running numbers: same date part and
-  // digits as invoices, their own prefix and counter.
   taxInvoicePrefix: text("tax_invoice_prefix").notNull().default("TAX-"),
-  taxSeq: integer("tax_seq").notNull().default(0),
-  taxSeqPeriod: text("tax_seq_period").notNull().default(""),
-  purchaseSeq: integer("purchase_seq").notNull().default(0),
-  transferSeq: integer("transfer_seq").notNull().default(0),
+  creditNotePrefix: text("credit_note_prefix").notNull().default("CN-"),
+  purchasePrefix: text("purchase_prefix").notNull().default("PO-"),
+  transferPrefix: text("transfer_prefix").notNull().default("TR-"),
+  numberPerBranch: boolean("number_per_branch").notNull().default(false),
   // Last automatic notification scan, so page loads scan at most every few minutes.
   notificationsScannedAt: timestamp("notifications_scanned_at", { withTimezone: true }),
   // Cash drawer rules. A closing count out by up to cashMinorTolerance only
@@ -174,10 +187,34 @@ export const branches = pgTable(
     phone: text("phone"),
     // Branch number printed on tax receipts (Thai Revenue Department): 00000 = head office.
     taxBranchCode: text("tax_branch_code"),
+    // Short code in document numbers when each branch has its own (e.g. SKV).
+    code: text("code"),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex("branches_pharmacy_name_idx").on(t.pharmacyId, t.name)],
+  (t) => [
+    uniqueIndex("branches_pharmacy_name_idx").on(t.pharmacyId, t.name),
+    uniqueIndex("branches_pharmacy_code_idx").on(t.pharmacyId, t.code),
+  ],
+);
+
+/**
+ * Where a document series' counter is: the last number issued (seq) in date
+ * part `period` ("" without one). `scope` is "" for the whole pharmacy, or a
+ * branch id when each branch has its own numbers.
+ */
+export const documentCounters = pgTable(
+  "document_counters",
+  {
+    pharmacyId: uuid("pharmacy_id")
+      .notNull()
+      .references(() => pharmacies.id, { onDelete: "cascade" }),
+    series: text("series", { enum: DOCUMENT_SERIES }).notNull(),
+    scope: text("scope").notNull().default(""),
+    seq: integer("seq").notNull().default(0),
+    period: text("period").notNull().default(""),
+  },
+  (t) => [uniqueIndex("document_counters_key_idx").on(t.pharmacyId, t.series, t.scope)],
 );
 
 export const users = pgTable(
@@ -193,8 +230,8 @@ export const users = pgTable(
     pharmacyId: uuid("pharmacy_id").references(() => pharmacies.id, {
       onDelete: "cascade",
     }),
-    // The one branch a staff member works in. null for admins, who work in
-    // every branch, and for super admins.
+    // The one branch a manager or staff member works in. null for admins, who
+    // work in every branch, and for super admins.
     branchId: uuid("branch_id").references(() => branches.id, { onDelete: "set null" }),
     isActive: boolean("is_active").notNull().default(true),
     // bcrypt hash of the 4-6 digit PIN used at the cash drawer; null = no PIN yet.
@@ -442,6 +479,7 @@ export const customers = pgTable(
     address: text("address"),
     notes: text("notes"),
     // Pre-fill full tax receipts: tax ID and head office / branch number.
+    taxIdType: text("tax_id_type", { enum: BUYER_ID_TYPES }).notNull().default("tax_id"),
     taxId: text("tax_id"),
     taxBranch: text("tax_branch"),
     // Which selling price the customer pays at the POS.
@@ -479,6 +517,9 @@ export const sales = pgTable(
     status: text("status", { enum: SALE_STATUSES }).notNull().default("completed"),
     // The selling price the items were charged at (the customer's level).
     priceLevel: text("price_level", { enum: PRICE_LEVELS }).notNull().default("regular"),
+    // true: the total includes the VAT in `tax`; false (sales before VAT-inclusive
+    // pricing): `tax` was added on top of subtotal - discount.
+    taxIncluded: boolean("tax_included").notNull().default(true),
     refundedAt: timestamp("refunded_at", { withTimezone: true }),
     notes: text("notes"),
     // The cash drawer session the sale was rung up in (required for cash), and
@@ -534,7 +575,7 @@ export type CashCountAttempt = {
 
 /**
  * A cash drawer of a branch (front counter, consult desk, …). Each one has its
- * own sessions; floatAmount is the change it should keep between sessions.
+ * own sessions; whatever cash a session leaves is counted by the next one.
  * Deactivated, never deleted, so its history stays.
  */
 export const cashDrawers = pgTable(
@@ -548,7 +589,6 @@ export const cashDrawers = pgTable(
       .notNull()
       .references(() => branches.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
-    floatAmount: money("float_amount").notNull().default(2000),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: createdAt(),
   },
@@ -634,8 +674,13 @@ export const cashMovements = pgTable(
       .references(() => cashShifts.id, { onDelete: "cascade" }),
     type: text("type", { enum: CASH_MOVEMENT_TYPES }).notNull(),
     amount: money("amount").notNull(),
-    // PAY_IN_CATEGORIES or PAY_OUT_CATEGORIES; null for drops, no-sales and older rows.
+    // PAY_IN_CATEGORIES, or PAY_OUT_CATEGORIES for pay-outs recorded before
+    // they became expenses; null for drops, no-sales and older rows.
     category: text("category"),
+    // Pay-outs: the expense the pay-out was booked as (its category and amount).
+    expenseId: uuid("expense_id").references((): AnyPgColumn => expenses.id, {
+      onDelete: "set null",
+    }),
     reason: text("reason").notNull(),
     // Cash drops: the bag or envelope number and the notes that went in it.
     bagNumber: text("bag_number"),
@@ -890,6 +935,8 @@ export const taxInvoices = pgTable(
       .references(() => sales.id, { onDelete: "cascade" }),
     number: text("number").notNull(),
     buyerName: text("buyer_name").notNull(),
+    buyerIdType: text("buyer_id_type", { enum: BUYER_ID_TYPES }).notNull().default("tax_id"),
+    // A 13-digit tax ID, or a passport number (buyerIdType).
     buyerTaxId: text("buyer_tax_id").notNull(),
     buyerAddress: text("buyer_address").notNull(),
     // "Head office" (สำนักงานใหญ่) or a branch number.
@@ -901,6 +948,37 @@ export const taxInvoices = pgTable(
     uniqueIndex("tax_invoices_sale_idx").on(t.saleId),
     uniqueIndex("tax_invoices_pharmacy_number_idx").on(t.pharmacyId, t.number),
     index("tax_invoices_pharmacy_created_idx").on(t.pharmacyId, t.createdAt),
+  ],
+);
+
+/**
+ * A credit note (ใบลดหนี้) cancelling a full tax receipt when its sale is
+ * refunded: refunds are whole sales, so it credits the full amount.
+ */
+export const creditNotes = pgTable(
+  "credit_notes",
+  {
+    id: id(),
+    pharmacyId: uuid("pharmacy_id")
+      .notNull()
+      .references(() => pharmacies.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id")
+      .notNull()
+      .references(() => branches.id, { onDelete: "cascade" }),
+    taxInvoiceId: uuid("tax_invoice_id")
+      .notNull()
+      .references(() => taxInvoices.id, { onDelete: "cascade" }),
+    saleId: uuid("sale_id")
+      .notNull()
+      .references(() => sales.id, { onDelete: "cascade" }),
+    number: text("number").notNull(),
+    reason: text("reason").notNull(),
+    issuedBy: uuid("issued_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("credit_notes_tax_invoice_idx").on(t.taxInvoiceId),
+    uniqueIndex("credit_notes_pharmacy_number_idx").on(t.pharmacyId, t.number),
   ],
 );
 
@@ -1020,6 +1098,9 @@ export type Sale = typeof sales.$inferSelect;
 export type SaleItem = typeof saleItems.$inferSelect;
 export type PriceLevel = (typeof PRICE_LEVELS)[number];
 export type TaxInvoice = typeof taxInvoices.$inferSelect;
+export type CreditNote = typeof creditNotes.$inferSelect;
+export type BuyerIdType = (typeof BUYER_ID_TYPES)[number];
+export type DocumentSeries = (typeof DOCUMENT_SERIES)[number];
 export type ProductImage = typeof productImages.$inferSelect;
 export type CashDrawer = typeof cashDrawers.$inferSelect;
 export type CashShift = typeof cashShifts.$inferSelect;

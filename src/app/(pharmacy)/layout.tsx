@@ -6,6 +6,7 @@ import { getDb } from "@/db";
 import { branches as branchesTable } from "@/db/schema";
 import { requirePharmacy } from "@/lib/auth";
 import { canSwitchBranch } from "@/lib/active-branch";
+import { vatRateOf } from "@/lib/vat";
 import { planLimits } from "@/lib/branches";
 import { countUnreadNotifications, scanNotificationsIfDue } from "@/lib/notifications";
 
@@ -35,7 +36,8 @@ export default async function PharmacyLayout({ children }: { children: React.Rea
         name: pharmacy.name,
         currency: pharmacy.currency,
         timezone: pharmacy.timezone,
-        taxRate: pharmacy.taxRate,
+        vatRate: vatRateOf(pharmacy),
+        priceRules: { memberDiscount: pharmacy.memberDiscount, staffDiscount: pharmacy.staffDiscount },
         branch: { id: branch.id, name: branch.name },
         branches: branches.map((b) => ({ id: b.id, name: b.name })),
         canSwitchBranch: canSwitchBranch(user),

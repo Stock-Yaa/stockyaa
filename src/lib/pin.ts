@@ -24,13 +24,14 @@ export function hashPin(pin: string): Promise<string> {
 }
 
 export type PinCheck =
-  | { ok: true; user: { id: string; name: string; role: "admin" | "staff" } }
+  | { ok: true; user: { id: string; name: string; role: "admin" | "manager" | "staff" } }
   | { ok: false; error: MessageKey };
 
 /**
  * Checks `pin` for an active user of the pharmacy. With `branch`, the user must
- * work there (staff of that branch, or an admin); with `adminOnly`, the user
- * must be an admin (a manager approving something). Counts wrong tries.
+ * work there (a manager or staff member of that branch, or an admin); with
+ * `managerOnly`, the user must be a manager or an admin (approving
+ * something). Counts wrong tries.
  */
 export async function checkPin(
   db: DbOrTx,
@@ -39,7 +40,7 @@ export async function checkPin(
     userId: string;
     pin: string;
     branch?: Pick<Branch, "id">;
-    adminOnly?: boolean;
+    managerOnly?: boolean;
   },
 ): Promise<PinCheck> {
   if (!pinField.safeParse(input.pin).success) return { ok: false, error: "cashDrawer.pinWrong" };
@@ -64,9 +65,9 @@ export async function checkPin(
     )
     .limit(1);
   if (!user || !user.isActive) return { ok: false, error: "cashDrawer.pinUserNotFound" };
-  const role = user.role === "admin" ? "admin" : "staff";
-  if (input.adminOnly && role !== "admin") return { ok: false, error: "cashDrawer.managerOnly" };
-  if (input.branch && role === "staff" && user.branchId !== input.branch.id) {
+  const role = user.role === "admin" || user.role === "manager" ? user.role : "staff";
+  if (input.managerOnly && role === "staff") return { ok: false, error: "cashDrawer.managerOnly" };
+  if (input.branch && role !== "admin" && user.branchId !== input.branch.id) {
     return { ok: false, error: "cashDrawer.pinUserNotFound" };
   }
   if (!user.pinHash) return { ok: false, error: "cashDrawer.pinNotSet" };

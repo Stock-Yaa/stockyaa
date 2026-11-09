@@ -13,6 +13,7 @@ import { requirePharmacy } from "@/lib/auth";
 import { listBranches, planLimits } from "@/lib/branches";
 import { getFormat } from "@/lib/format-server";
 import { pageTitle } from "@/lib/metadata";
+import { ROLE_LABEL } from "@/lib/roles";
 import { setUserActive } from "./actions";
 import { ResetPasswordButton, SetPinButton, UserFormButton } from "./user-forms";
 
@@ -73,7 +74,7 @@ export default async function UsersPage() {
         <TBody>
           {rows.map((row) => {
             const isSelf = row.id === me.id;
-            const role = row.role === "admin" ? "admin" : "staff";
+            const role = row.role === "admin" || row.role === "manager" ? row.role : "staff";
             const ownBranch = row.branchId ? branchById.get(row.branchId) : undefined;
             return (
               <TR key={row.id}>
@@ -86,7 +87,7 @@ export default async function UsersPage() {
                   )}
                 </TD>
                 <TD>{row.email}</TD>
-                <TD>{role === "admin" ? t("users.roleAdmin") : t("users.roleStaff")}</TD>
+                <TD>{t(ROLE_LABEL[role])}</TD>
                 <TD>
                   {role === "admin"
                     ? t("users.allBranches")

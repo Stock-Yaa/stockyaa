@@ -2,10 +2,13 @@
 
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { useT } from "@/i18n/client";
+import { isBuyerId, normaliseBuyerId, type BuyerIdKind } from "@/lib/buyer-id";
 
 /** The buyer on a full tax receipt, as typed in the form. */
 export type TaxBuyer = {
   buyerName: string;
+  /** A Thai tax ID, or a passport number for a foreign buyer. */
+  buyerIdType: BuyerIdKind;
   buyerTaxId: string;
   buyerAddress: string;
   /** none = a private person; head = a company's head office; branch = branchCode. */
@@ -19,6 +22,7 @@ const HEAD_OFFICE = "00000";
 /** Empty buyer, or one filled in from the customer's saved details. */
 export function buyerFrom(customer?: {
   name: string;
+  taxIdType: BuyerIdKind;
   taxId: string | null;
   taxBranch: string | null;
   address: string | null;
@@ -26,6 +30,7 @@ export function buyerFrom(customer?: {
   const branch = customer?.taxBranch ?? null;
   return {
     buyerName: customer?.name ?? "",
+    buyerIdType: customer?.taxIdType ?? "tax_id",
     buyerTaxId: customer?.taxId ?? "",
     buyerAddress: customer?.address ?? "",
     branchType: branch === null ? "none" : branch === HEAD_OFFICE ? "head" : "branch",
@@ -37,6 +42,8 @@ export function buyerFrom(customer?: {
 
 /** What the server stores for the buyer's branch. */
 export function buyerBranchValue(buyer: TaxBuyer): string {
+  // A foreign buyer has no Thai branch.
+  if (buyer.buyerIdType === "passport") return "";
   if (buyer.branchType === "head") return HEAD_OFFICE;
   if (buyer.branchType === "branch") return buyer.branchCode.trim();
   return "";
@@ -46,7 +53,8 @@ export function buyerBranchValue(buyer: TaxBuyer): string {
 export function buyerPayload(buyer: TaxBuyer, customerId: string | null) {
   return {
     buyerName: buyer.buyerName.trim(),
-    buyerTaxId: buyer.buyerTaxId.replace(/[\s-]/g, ""),
+    buyerIdType: buyer.buyerIdType,
+    buyerTaxId: normaliseBuyerId(buyer.buyerTaxId, buyer.buyerIdType),
     buyerAddress: buyer.buyerAddress.trim(),
     buyerBranch: buyerBranchValue(buyer),
     saveToCustomer: Boolean(customerId) && buyer.saveToCustomer,
@@ -58,9 +66,11 @@ export function buyerPayload(buyer: TaxBuyer, customerId: string | null) {
 export function buyerReady(buyer: TaxBuyer): boolean {
   return (
     buyer.buyerName.trim() !== "" &&
-    /^\d{13}$/.test(buyer.buyerTaxId.replace(/[\s-]/g, "")) &&
+    isBuyerId(buyer.buyerTaxId, buyer.buyerIdType) &&
     buyer.buyerAddress.trim() !== "" &&
-    (buyer.branchType !== "branch" || /^\d{5}$/.test(buyer.branchCode.trim()))
+    (buyer.buyerIdType === "passport" ||
+      buyer.branchType !== "branch" ||
+      /^\d{5}$/.test(buyer.branchCode.trim()))
   );
 }
 
@@ -95,25 +105,39 @@ export function TaxBuyerFields({
           autoFocus
         />
       </Field>
+      <Field label={t("taxReceipt.buyerIdType")} htmlFor="buyerIdType" error={errors.buyerIdType}>
+        <Select
+          id="buyerIdType"
+          name="buyerIdType"
+          value={value.buyerIdType}
+          onChange={(e) => set({ buyerIdType: e.target.value as BuyerIdKind })}
+        >
+          <option value="tax_id">{t("taxReceipt.idTypeTaxId")}</option>
+          <option value="passport">{t("taxReceipt.idTypePassport")}</option>
+        </Select>
+      </Field>
       <Field
-        label={t("taxReceipt.buyerTaxId")}
+        label={t(value.buyerIdType === "passport" ? "taxReceipt.buyerPassport" : "taxReceipt.buyerTaxId")}
         htmlFor="buyerTaxId"
         error={errors.buyerTaxId}
-        hint={t("taxReceipt.buyerTaxIdHint")}
+        hint={t(value.buyerIdType === "passport" ? "taxReceipt.buyerPassportHint" : "taxReceipt.buyerTaxIdHint")}
         required
       >
         <Input
           id="buyerTaxId"
           name="buyerTaxId"
-          inputMode="numeric"
+          inputMode={value.buyerIdType === "passport" ? "text" : "numeric"}
           value={value.buyerTaxId}
-          maxLength={17}
+          maxLength={value.buyerIdType === "passport" ? 24 : 17}
           onChange={(e) => set({ buyerTaxId: e.target.value })}
           required
           className="tabular-nums"
         />
       </Field>
-      <Field label={t("taxReceipt.buyerBranch")} htmlFor="branchType" error={errors.buyerBranch}>
+      {value.buyerIdType === "passport" ? (
+        <input type="hidden" name="buyerBranch" value="" />
+      ) : (
+      <Field label={t("taxReceipt.buyerBranch")} htmlFor="branchType" error={errors.buyerBranch} className="sm:col-span-2">
         <input type="hidden" name="buyerBranch" value={buyerBranchValue(value)} />
         <div className="flex gap-2">
           <Select
@@ -140,6 +164,7 @@ export function TaxBuyerFields({
           )}
         </div>
       </Field>
+      )}
       <Field label={t("taxReceipt.buyerAddress")} htmlFor="buyerAddress" error={errors.buyerAddress} required className="sm:col-span-2">
         <Textarea
           id="buyerAddress"

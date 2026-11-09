@@ -1,4 +1,4 @@
-import type { PriceLevel, Product } from "@/db/schema";
+import type { Pharmacy, PriceLevel, Product } from "@/db/schema";
 
 /*
  * Selling price levels. Client-safe: the POS screen and createSale both use
@@ -10,10 +10,20 @@ export const PRICE_LEVEL_OPTIONS = ["regular", "member", "staff"] as const satis
 
 export type ProductPrices = Pick<Product, "salePrice" | "memberPrice" | "staffPrice">;
 
-/** What one unit costs at `level`; a level without its own price falls back to the regular price. */
-export function priceFor(product: ProductPrices, level: PriceLevel): number {
-  if (level === "member") return product.memberPrice ?? product.salePrice;
-  if (level === "staff") return product.staffPrice ?? product.salePrice;
+/** The pharmacy's rules for products without their own member or staff price: percent off the regular price. */
+export type PriceRules = Pick<Pharmacy, "memberDiscount" | "staffDiscount">;
+
+const percentOff = (price: number, percent: number | null) =>
+  percent ? Math.round(price * (100 - percent)) / 100 : price;
+
+/**
+ * What one unit costs at `level`: the product's own member or staff price,
+ * otherwise the pharmacy's rule for that level applied to the regular price,
+ * otherwise the regular price.
+ */
+export function priceFor(product: ProductPrices, level: PriceLevel, rules: PriceRules): number {
+  if (level === "member") return product.memberPrice ?? percentOff(product.salePrice, rules.memberDiscount);
+  if (level === "staff") return product.staffPrice ?? percentOff(product.salePrice, rules.staffDiscount);
   return product.salePrice;
 }
 

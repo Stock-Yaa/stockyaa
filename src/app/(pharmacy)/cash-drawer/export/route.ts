@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getDb } from "@/db";
 import { getT } from "@/i18n/server";
-import { canSwitchBranch } from "@/lib/active-branch";
+import { isManager } from "@/lib/active-branch";
 import { requirePharmacy } from "@/lib/auth";
 import { csvResponse, type CsvCell } from "@/lib/csv";
 import { todayInTimezone } from "@/lib/dates";
@@ -11,7 +11,7 @@ import { STATUS_BADGE } from "../history-tab";
 /** The filtered session history of the current branch as CSV (managers only). */
 export async function GET(request: Request) {
   const { user, pharmacy, branch } = await requirePharmacy();
-  if (!canSwitchBranch(user)) notFound();
+  if (!isManager(user)) notFound();
   const [t, db] = await Promise.all([getT(), getDb()]);
   const url = new URL(request.url);
   const filters = parseHistoryFilters({

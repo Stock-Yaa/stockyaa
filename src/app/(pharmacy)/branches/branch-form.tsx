@@ -93,6 +93,21 @@ export function BranchFormButton({
               className="tabular-nums"
             />
           </Field>
+          <Field
+            label={t("branches.code")}
+            htmlFor="branch-code"
+            error={errors.code}
+            hint={t("branches.codeHint")}
+          >
+            <Input
+              id="branch-code"
+              name="code"
+              maxLength={6}
+              placeholder="SKV"
+              defaultValue={branch?.code ?? ""}
+              className="uppercase"
+            />
+          </Field>
           <ModalFooter>
             <Button variant="outline" onClick={() => setOpen(false)} disabled={pending}>
               {t("common.cancel")}

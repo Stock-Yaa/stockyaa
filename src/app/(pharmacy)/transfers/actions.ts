@@ -122,7 +122,7 @@ export async function createTransfer(formData: FormData): Promise<ActionState> {
   let transferId: string;
   try {
     transferId = await db.transaction(async (tx) => {
-      const reference = await nextTransferReference(tx, pharmacy.id);
+      const reference = await nextTransferReference(tx, pharmacy.id, today, branch.id);
       const [transfer] = await tx
         .insert(stockTransfers)
         .values({

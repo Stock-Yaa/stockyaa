@@ -24,6 +24,11 @@ const branchSchema = z.object({
   address: optionalText(),
   phone: optionalText(50),
   taxBranchCode: buyerBranchField,
+  // Upper-cased; blank = none.
+  code: z.preprocess(
+    (v) => (typeof v === "string" ? v.trim().toUpperCase() || null : null),
+    z.string().regex(/^[A-Z0-9]{1,6}$/, "branches.codeInvalid").nullable(),
+  ),
 });
 
 /**
@@ -43,7 +48,22 @@ export async function saveBranch(formData: FormData): Promise<ActionState> {
     };
   }
   const { id, ...values } = parsed.data;
+  // With numbers per branch, the code is part of every document number.
+  if (pharmacy.numberPerBranch && !values.code) {
+    return { ok: false, fieldErrors: { code: t("branches.codeRequired") } };
+  }
   const db = await getDb();
+  if (values.code) {
+    const taken = await db.$count(
+      branches,
+      and(
+        eq(branches.pharmacyId, pharmacy.id),
+        eq(branches.code, values.code),
+        id ? ne(branches.id, id) : undefined,
+      ),
+    );
+    if (taken > 0) return { ok: false, fieldErrors: { code: t("branches.codeTaken") } };
+  }
 
   try {
     const refusal = await db.transaction(async (tx): Promise<Refusal> => {

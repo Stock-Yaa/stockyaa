@@ -34,6 +34,8 @@ const notifications = {
   cashVarianceBlockedBody: "{staff} closed {drawer} with a difference of {amount}. The drawer is blocked until you decide.",
   cashOpeningBody: "{staff}'s opening count of {drawer} differs by {amount} from what the last session left.",
   cashPayoutBody: "{staff} paid out {amount} from {drawer}, over the approval limit.",
+  priceDiscountTitle: "Discount on a {level} price",
+  priceDiscountBody: "{staff} gave {discount} off {invoice}.",
 };
 
 export default notifications;

@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getDb } from "@/db";
 import { saleItems, sales, taxInvoices } from "@/db/schema";
-import type { MessageKey } from "@/i18n/messages";
+import { createTranslator, getMessages, type MessageKey } from "@/i18n/messages";
 import { getT } from "@/i18n/server";
 import { fieldErrorsFrom, type ActionState } from "@/lib/action";
 import { branchChanged } from "@/lib/active-branch";
@@ -14,8 +14,9 @@ import { addBatch, changeBatchQuantity } from "@/lib/stock";
 import { now } from "@/lib/time";
 import { todayInTimezone } from "@/lib/dates";
 import { isUniqueViolation } from "@/lib/db-error";
-import { buyerSchema, issueTaxInvoice } from "@/lib/tax-invoice";
+import { buyerSchema, issueCreditNote, issueTaxInvoice, taxReceiptAllowed } from "@/lib/tax-invoice";
 import { formToObject, requiredId } from "@/lib/validation";
+import { z } from "zod";
 
 /**
  * Refunds a whole sale: every unit goes back into the batch it was sold from
@@ -23,7 +24,8 @@ import { formToObject, requiredId } from "@/lib/validation";
  * `activeBranchId` is the branch the receipt page was rendered for; only
  * sales of the current branch can be refunded, and their stock returns there.
  * The money of a cash sale comes out of `shiftId`, the open session of this
- * device's drawer; without one a cash sale cannot be refunded.
+ * device's drawer; without one a cash sale cannot be refunded. A sale with a
+ * full tax receipt also gets a credit note cancelling it.
  */
 export async function refundSale(
   id: string,
@@ -59,7 +61,7 @@ export async function refundSale(
     return { ok: false, message: t("sales.refundNeedsDrawer") };
   }
 
-  const refunded = await db.transaction(async (tx): Promise<boolean | "drawer"> => {
+  const refunded = await db.transaction(async (tx): Promise<false | "drawer" | { creditNumber: string | null }> => {
     // Lock the sale and check again, so two people pressing Refund at the
     // same moment cannot both put the stock back.
     const [sale] = await tx
@@ -113,7 +115,16 @@ export async function refundSale(
         refundShiftId: sale.paymentMethod === "cash" ? (shift?.id ?? null) : null,
       })
       .where(thisSale);
-    return true;
+    const creditNumber = await issueCreditNote(tx, {
+      pharmacyId: pharmacy.id,
+      branchId: sale.branchId,
+      saleId: sale.id,
+      day: todayInTimezone(pharmacy.timezone),
+      userId: user.id,
+      // The document is Thai and English, so is its reason.
+      reason: `${th("taxReceipt.creditReasonRefund")} / ${en("taxReceipt.creditReasonRefund")}`,
+    });
+    return { creditNumber };
   });
   if (refunded === "drawer") return { ok: false, message: t("sales.refundNeedsDrawer") };
   if (!refunded) return { ok: false, message: t("sales.alreadyRefunded") };
@@ -122,19 +133,30 @@ export async function refundSale(
   revalidatePath(`/sales/${id}`);
   revalidatePath("/pos");
   revalidatePath("/cash-drawer", "layout");
-  return { ok: true, message: t("sales.refunded") };
+  return {
+    ok: true,
+    message: refunded.creditNumber
+      ? t("sales.refundedWithCredit", { number: refunded.creditNumber })
+      : t("sales.refunded"),
+  };
 }
 
-const issueSchema = buyerSchema.extend({ saleId: requiredId });
+const issueSchema = z.intersection(buyerSchema, z.object({ saleId: requiredId }));
+
+// Credit notes carry their reason in both languages.
+const th = createTranslator(getMessages("th"));
+const en = createTranslator(getMessages("en"));
 
 /**
  * Issues a full tax receipt for an existing completed sale of the current
- * branch (one per sale), with the next tax receipt number.
+ * branch (one per sale, up to TAX_RECEIPT_DAYS after it), with the next tax
+ * receipt number. Only a VAT-registered pharmacy issues them.
  */
 export async function issueTaxReceipt(formData: FormData): Promise<ActionState> {
   const { user, pharmacy, branch } = await requirePharmacy();
   const t = await getT();
   if (branchChanged(formData, branch)) return { ok: false, message: t("branches.changedElsewhere") };
+  if (!pharmacy.vatRegistered) return { ok: false, message: t("taxReceipt.notVatRegistered") };
   const parsed = issueSchema.safeParse(formToObject(formData));
   if (!parsed.success) {
     return { ok: false, fieldErrors: fieldErrorsFrom(parsed.error, (m) => t(m as MessageKey)) };
@@ -144,12 +166,13 @@ export async function issueTaxReceipt(formData: FormData): Promise<ActionState> 
   try {
     const refusal = await db.transaction(async (tx): Promise<MessageKey | null> => {
       const [sale] = await tx
-        .select({ id: sales.id, status: sales.status, customerId: sales.customerId })
+        .select({ id: sales.id, status: sales.status, customerId: sales.customerId, createdAt: sales.createdAt })
         .from(sales)
         .where(and(eq(sales.id, saleId), eq(sales.pharmacyId, pharmacy.id), eq(sales.branchId, branch.id)))
         .for("update");
       if (!sale) return "common.notFound";
       if (sale.status !== "completed") return "taxReceipt.refundedSale";
+      if (!taxReceiptAllowed(sale.createdAt)) return "taxReceipt.tooLate";
       const existing = await tx.$count(taxInvoices, eq(taxInvoices.saleId, sale.id));
       if (existing > 0) return "taxReceipt.alreadyIssued";
       await issueTaxInvoice(tx, {

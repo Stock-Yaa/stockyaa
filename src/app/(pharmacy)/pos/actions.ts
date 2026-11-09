@@ -7,6 +7,7 @@ import { getDb } from "@/db";
 import {
   PAYMENT_METHODS,
   customers,
+  notifications,
   products,
   refillReminders,
   saleItems,
@@ -22,6 +23,7 @@ import { priceFor } from "@/lib/pricing";
 import { buyerSchema, issueTaxInvoice, type BuyerInput } from "@/lib/tax-invoice";
 import { InsufficientStockError, deductStockFefo, nextInvoiceNumber } from "@/lib/stock";
 import { round2 } from "@/lib/utils";
+import { vatRateOf } from "@/lib/vat";
 import { nonNegativeNumber, optionalId, positiveInt, requiredId, requiredText } from "@/lib/validation";
 import type { PosCustomer } from "./customer-picker";
 import { computeSaleTotals, type SalePayload } from "./totals";
@@ -118,10 +120,10 @@ export async function createSale(payload: SalePayload): Promise<CreateSaleResult
   // Cart order, so receipts list items the way they were rung up.
   const lines = [...quantities].flatMap(([productId, quantity]) => {
     const product = productById.get(productId);
-    return product ? [{ product, quantity, unitPrice: priceFor(product, priceLevel) }] : [];
+    return product ? [{ product, quantity, unitPrice: priceFor(product, priceLevel, pharmacy) }] : [];
   });
 
-  const totals = computeSaleTotals(lines, input.discount, pharmacy.taxRate);
+  const totals = computeSaleTotals(lines, input.discount, vatRateOf(pharmacy));
   if (totals.total > MAX_MONEY) return { ok: false, message: t("pos.invalidSale") };
 
   // Card and transfer are always paid exactly; only cash has change.
@@ -136,6 +138,8 @@ export async function createSale(payload: SalePayload): Promise<CreateSaleResult
   // A full tax receipt is issued with the sale when the customer asked for one.
   let taxBuyer: BuyerInput | null = null;
   if (payload.taxBuyer) {
+    // Only a VAT-registered pharmacy may issue tax receipts.
+    if (!pharmacy.vatRegistered) return { ok: false, message: t("taxReceipt.notVatRegistered") };
     const buyer = buyerSchema.safeParse({ ...payload.taxBuyer, customerId: input.customerId });
     if (!buyer.success) return { ok: false, message: t("pos.taxBuyerInvalid") };
     taxBuyer = buyer.data;
@@ -151,7 +155,7 @@ export async function createSale(payload: SalePayload): Promise<CreateSaleResult
       // is written. Cash needs one; card and transfer are linked when there is one.
       const shift = input.shiftId ? await lockShiftForCash(tx, branch, input.shiftId) : null;
       if (input.paymentMethod === "cash" && !shift) throw new DrawerNotOpenError();
-      const invoiceNumber = await nextInvoiceNumber(tx, pharmacy.id, today);
+      const invoiceNumber = await nextInvoiceNumber(tx, pharmacy.id, today, branch.id);
       const [created] = await tx
         .insert(sales)
         .values({
@@ -171,6 +175,24 @@ export async function createSale(payload: SalePayload): Promise<CreateSaleResult
           shiftId: shift?.id ?? null,
         })
         .returning({ id: sales.id });
+
+      // A manual discount on top of a member or staff price is allowed, and
+      // flagged to the managers.
+      if (priceLevel !== "regular" && totals.discount > 0) {
+        await tx.insert(notifications).values({
+          pharmacyId: pharmacy.id,
+          branchId: branch.id,
+          type: "price_discount",
+          key: `price_discount:${created.id}`,
+          data: {
+            saleId: created.id,
+            invoice: invoiceNumber,
+            level: priceLevel,
+            discount: totals.discount,
+            staff: user.name,
+          },
+        });
+      }
 
       for (const line of lines) {
         const taken = await deductStockFefo(tx, {
@@ -286,6 +308,7 @@ export async function createPosCustomer(name: string): Promise<CreateCustomerRes
       name: customers.name,
       phone: customers.phone,
       priceLevel: customers.priceLevel,
+      taxIdType: customers.taxIdType,
       taxId: customers.taxId,
       taxBranch: customers.taxBranch,
       address: customers.address,

@@ -37,13 +37,11 @@ export function CloseShiftPanel({
   shiftId,
   staff,
   ownerId,
-  floatAmount,
   initial,
 }: {
   shiftId: string;
   staff: StaffOption[];
   ownerId: string | null;
-  floatAmount: number;
   /** The last count, when counting started earlier (page reloaded). */
   initial: CountOutcome | null;
 }) {
@@ -122,7 +120,6 @@ export function CloseShiftPanel({
     <CountResultPanel
       shiftId={shiftId}
       result={result}
-      floatAmount={floatAmount}
       onRecount={() => setRecounting(true)}
     />
   );
@@ -131,12 +128,10 @@ export function CloseShiftPanel({
 function CountResultPanel({
   shiftId,
   result,
-  floatAmount,
   onRecount,
 }: {
   shiftId: string;
   result: CountOutcome;
-  floatAmount: number;
   onRecount: () => void;
 }) {
   const t = useT();
@@ -145,7 +140,7 @@ function CountResultPanel({
   const level = LEVEL[result.level];
   const out = result.level !== "balanced";
   const toReview = result.level === "major" || result.level === "severe";
-  const [drop, setDrop] = useState(String(Math.max(0, round2(result.counted - floatAmount))));
+  const [drop, setDrop] = useState("0");
   const { onSubmit, pending, errors } = useFormAction(finishClose, {
     onSuccess: () => router.push(`/cash-drawer/${shiftId}?closed=1`),
   });
@@ -224,7 +219,6 @@ function CountResultPanel({
             htmlFor="closingDrop"
             error={errors.closingDrop}
             hint={t("cashDrawer.closingDropHint", {
-              float: f.money(floatAmount),
               left: f.money(Math.max(0, round2(result.counted - dropValue))),
             })}
           >

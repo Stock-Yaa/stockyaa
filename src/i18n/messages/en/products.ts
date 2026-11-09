@@ -82,7 +82,7 @@ const products = {
   deleteCategoryBody: "Products in this category are kept and become uncategorised.",
   memberPriceWithCurrency: "Member price ({currency})",
   staffPriceWithCurrency: "Staff price ({currency})",
-  levelPriceHint: "Leave blank to charge the regular price.",
+  levelPriceHint: "Leave blank to use the rule in Settings (% off the regular price), or the regular price.",
   memberShort: "Member",
   staffShort: "Staff",
   photos: "Photos",

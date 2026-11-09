@@ -15,6 +15,7 @@ export type PosCustomer = {
   phone: string | null;
   priceLevel: PriceLevel;
   /** Saved details for a full tax receipt. */
+  taxIdType: "tax_id" | "passport";
   taxId: string | null;
   taxBranch: string | null;
   address: string | null;

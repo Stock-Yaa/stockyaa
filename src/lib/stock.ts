@@ -1,6 +1,6 @@
 import { and, asc, eq, gt, gte, isNull, or, sql } from "drizzle-orm";
 import type { DbOrTx, Tx } from "@/db";
-import { batches, pharmacies, stockMovements } from "@/db/schema";
+import { batches, stockMovements } from "@/db/schema";
 import { inScope, type BranchScope } from "./branches";
 import { nextDocumentNumber } from "./numbering";
 
@@ -243,27 +243,17 @@ export async function changeBatchQuantity(
   return { ...batch, quantity: next };
 }
 
-/** Next invoice number for a pharmacy, in its own format (see ./numbering). Call inside a transaction. */
-export function nextInvoiceNumber(tx: Tx, pharmacyId: string, day: string): Promise<string> {
-  return nextDocumentNumber(tx, pharmacyId, "sale", day);
+/** Next invoice number for a sale of `branchId`, in the pharmacy's own format (see ./numbering). Call inside a transaction. */
+export function nextInvoiceNumber(tx: Tx, pharmacyId: string, day: string, branchId: string): Promise<string> {
+  return nextDocumentNumber(tx, pharmacyId, "sale", day, branchId);
 }
 
-/** Next purchase reference for a pharmacy, e.g. PO-000012. Call inside a transaction. */
-export async function nextPurchaseReference(tx: Tx, pharmacyId: string): Promise<string> {
-  const [row] = await tx
-    .update(pharmacies)
-    .set({ purchaseSeq: sql`${pharmacies.purchaseSeq} + 1` })
-    .where(eq(pharmacies.id, pharmacyId))
-    .returning({ seq: pharmacies.purchaseSeq });
-  return `PO-${String(row.seq).padStart(6, "0")}`;
+/** Next purchase order reference for `branchId`, e.g. PO-000012. Call inside a transaction. */
+export function nextPurchaseReference(tx: Tx, pharmacyId: string, day: string, branchId: string): Promise<string> {
+  return nextDocumentNumber(tx, pharmacyId, "purchase", day, branchId);
 }
 
-/** Next stock transfer reference for a pharmacy, e.g. TR-000004. Call inside a transaction. */
-export async function nextTransferReference(tx: Tx, pharmacyId: string): Promise<string> {
-  const [row] = await tx
-    .update(pharmacies)
-    .set({ transferSeq: sql`${pharmacies.transferSeq} + 1` })
-    .where(eq(pharmacies.id, pharmacyId))
-    .returning({ seq: pharmacies.transferSeq });
-  return `TR-${String(row.seq).padStart(6, "0")}`;
+/** Next stock transfer reference, numbered in the sending branch, e.g. TR-000004. Call inside a transaction. */
+export function nextTransferReference(tx: Tx, pharmacyId: string, day: string, branchId: string): Promise<string> {
+  return nextDocumentNumber(tx, pharmacyId, "transfer", day, branchId);
 }

@@ -2,9 +2,17 @@ import { and, count, desc, eq, gte, isNotNull, isNull, lt, sql } from "drizzle-o
 import { CircleCheck, Receipt } from "lucide-react";
 import Link from "next/link";
 import { Badge, Card } from "@/components/ui/card";
-import { cashDrawers, cashMovements, cashReviews, cashShifts, users } from "@/db/schema";
+import {
+  cashDrawers,
+  cashMovements,
+  cashReviews,
+  cashShifts,
+  expenseCategories,
+  expenses,
+  users,
+} from "@/db/schema";
 import type { MessageKey } from "@/i18n/messages";
-import { switchBranchHref } from "@/lib/active-branch";
+import { canSwitchBranch, switchBranchHref } from "@/lib/active-branch";
 import { daysFromNow } from "@/lib/time";
 import { ForceCloseButton, ReviewDecision } from "./manager-forms";
 import { categoryLabel, type Ctx } from "./shared";
@@ -34,12 +42,16 @@ function Section({ title, count: total, children }: { title: string; count: numb
 }
 
 /**
- * The manager's queue, across every branch: counts and pay-outs waiting for a
- * decision, sessions somebody forgot to close, and people who are often short.
+ * The manager's queue (an admin's across every branch, a manager's in their
+ * own): counts and pay-outs waiting for a decision, sessions somebody forgot
+ * to close, people who are often short, and pay-outs rejected against them.
  */
 export async function ReviewTab({ ctx }: { ctx: Ctx }) {
-  const { db, pharmacy, branch, branches, t, f } = ctx;
-  const [pending, stale, patterns] = await Promise.all([
+  const { db, pharmacy, branch, branches, user, t, f } = ctx;
+  const everyBranch = canSwitchBranch(user);
+  const shiftsHere = everyBranch ? undefined : eq(cashShifts.branchId, branch.id);
+  const reviewsHere = everyBranch ? undefined : eq(cashReviews.branchId, branch.id);
+  const [pending, stale, patterns, rejected] = await Promise.all([
     db
       .select({
         id: cashReviews.id,
@@ -57,6 +69,7 @@ export async function ReviewTab({ ctx }: { ctx: Ctx }) {
         expectedOpening: cashShifts.expectedOpening,
         movementId: cashMovements.id,
         category: cashMovements.category,
+        categoryName: expenseCategories.name,
         movementNote: cashMovements.reason,
         receiptPath: cashMovements.receiptPath,
       })
@@ -65,7 +78,9 @@ export async function ReviewTab({ ctx }: { ctx: Ctx }) {
       .innerJoin(cashDrawers, eq(cashDrawers.id, cashReviews.drawerId))
       .leftJoin(users, eq(users.id, cashReviews.userId))
       .leftJoin(cashMovements, eq(cashMovements.id, cashReviews.movementId))
-      .where(and(eq(cashReviews.pharmacyId, pharmacy.id), eq(cashReviews.status, "pending")))
+      .leftJoin(expenses, eq(expenses.id, cashMovements.expenseId))
+      .leftJoin(expenseCategories, eq(expenseCategories.id, expenses.categoryId))
+      .where(and(eq(cashReviews.pharmacyId, pharmacy.id), reviewsHere, eq(cashReviews.status, "pending")))
       .orderBy(desc(cashReviews.blocking), desc(cashReviews.createdAt)),
     db
       .select({
@@ -81,6 +96,7 @@ export async function ReviewTab({ ctx }: { ctx: Ctx }) {
       .where(
         and(
           eq(cashShifts.pharmacyId, pharmacy.id),
+          shiftsHere,
           isNull(cashShifts.closedAt),
           lt(cashShifts.openedAt, daysFromNow(-STALE_HOURS / 24)),
         ),
@@ -98,6 +114,7 @@ export async function ReviewTab({ ctx }: { ctx: Ctx }) {
       .where(
         and(
           eq(cashShifts.pharmacyId, pharmacy.id),
+          shiftsHere,
           isNotNull(cashShifts.closedAt),
           gte(cashShifts.closedAt, daysFromNow(-PATTERN_DAYS)),
           lt(cashShifts.difference, 0),
@@ -106,6 +123,27 @@ export async function ReviewTab({ ctx }: { ctx: Ctx }) {
       .groupBy(cashShifts.openedBy, users.name)
       .having(gte(count(), PATTERN_COUNT))
       .orderBy(sql`sum(${cashShifts.difference})`),
+    // Rejected pay-outs stay on the record of the person who paid them out.
+    db
+      .select({
+        userId: cashReviews.userId,
+        name: users.name,
+        rejected: count(),
+        total: sql<number>`sum(${cashReviews.amount})`.mapWith(Number),
+      })
+      .from(cashReviews)
+      .leftJoin(users, eq(users.id, cashReviews.userId))
+      .where(
+        and(
+          eq(cashReviews.pharmacyId, pharmacy.id),
+          reviewsHere,
+          eq(cashReviews.kind, "payout"),
+          eq(cashReviews.status, "rejected"),
+          gte(cashReviews.reviewedAt, daysFromNow(-PATTERN_DAYS)),
+        ),
+      )
+      .groupBy(cashReviews.userId, users.name)
+      .orderBy(desc(sql`sum(${cashReviews.amount})`)),
   ]);
 
   const branchName = new Map(branches.map((b) => [b.id, b.name]));
@@ -117,7 +155,7 @@ export async function ReviewTab({ ctx }: { ctx: Ctx }) {
   const where = (branchId: string, drawer: string) =>
     showBranch ? `${branchName.get(branchId) ?? "—"} · ${drawer}` : drawer;
 
-  if (pending.length === 0 && stale.length === 0 && patterns.length === 0) {
+  if (pending.length === 0 && stale.length === 0 && patterns.length === 0 && rejected.length === 0) {
     return (
       <Card className="flex flex-col items-center px-6 py-14 text-center">
         <CircleCheck className="size-10 text-success" />
@@ -148,7 +186,7 @@ export async function ReviewTab({ ctx }: { ctx: Ctx }) {
                   left: f.money(row.expectedOpening),
                 });
               } else {
-                detail = [categoryLabel("out", row.category, t), row.movementNote].filter(Boolean).join(" · ");
+                detail = [row.categoryName ?? categoryLabel("out", row.category, t), row.movementNote].filter(Boolean).join(" · ");
               }
               return (
                 <li key={row.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
@@ -224,6 +262,36 @@ export async function ReviewTab({ ctx }: { ctx: Ctx }) {
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {t("cashDrawer.patternTotal", { amount: f.money(row.total) })}
+                  </p>
+                </div>
+                {row.userId && (
+                  <Link
+                    href={`/cash-drawer?tab=history&staff=${row.userId}`}
+                    className="text-sm font-medium text-primary hover:underline"
+                  >
+                    {t("cashDrawer.viewHistory")}
+                  </Link>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+
+      {rejected.length > 0 && (
+        <Section title={t("cashDrawer.rejectedPayouts", { days: PATTERN_DAYS })} count={rejected.length}>
+          <ul className="divide-y divide-border">
+            {rejected.map((row) => (
+              <li key={row.userId ?? "none"} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone="danger">{t("cashDrawer.review_rejected")}</Badge>
+                    <span className="font-medium">
+                      {t("cashDrawer.rejectedTitle", { name: row.name ?? "—", count: row.rejected })}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {t("cashDrawer.rejectedTotal", { amount: f.money(row.total) })}
                   </p>
                 </div>
                 {row.userId && (

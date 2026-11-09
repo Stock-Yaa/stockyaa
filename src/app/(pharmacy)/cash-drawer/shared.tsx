@@ -87,7 +87,7 @@ export function ActivityList({ rows, t, f }: { rows: ShiftActivity[]; t: Ctx["t"
   return (
     <ul className="divide-y divide-border">
       {rows.map((row) => {
-        const category = categoryLabel(row.kind, row.category, t);
+        const category = row.categoryName ?? categoryLabel(row.kind, row.category, t);
         const detail = [category, row.kind === "drop" ? null : row.label || null].filter(Boolean).join(" · ");
         return (
           <li key={row.key} className="flex items-center gap-4 px-6 py-3">

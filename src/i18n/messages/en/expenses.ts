@@ -52,6 +52,8 @@ const expenses = {
   colorOrange: "Orange",
   colorBlue: "Blue",
   colorGray: "Grey",
+  fromDrawer: "This expense is a cash drawer pay-out, so it cannot be changed here.",
+  fromDrawerBadge: "Cash drawer",
 };
 
 export default expenses;

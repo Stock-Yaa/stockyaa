@@ -17,9 +17,15 @@ import { getDb } from "@/db";
 import { cashReviews, cashShifts, type CashShift } from "@/db/schema";
 import type { MessageKey } from "@/i18n/messages";
 import { getT } from "@/i18n/server";
-import { canSwitchBranch } from "@/lib/active-branch";
+import { canSwitchBranch, isManager } from "@/lib/active-branch";
 import { requirePharmacy } from "@/lib/auth";
-import { getDrawerState, getPreviousShift, getShiftActivity, getShiftTotals } from "@/lib/cash-drawer";
+import {
+  getDrawerState,
+  getPreviousShift,
+  getShiftActivity,
+  getShiftTotals,
+  payoutCategories,
+} from "@/lib/cash-drawer";
 import { canRecount, cashRulesOf, varianceLevel } from "@/lib/cash-rules";
 import { getFormat } from "@/lib/format-server";
 import { pageTitle } from "@/lib/metadata";
@@ -92,7 +98,8 @@ export default async function CashDrawerPage({
 }) {
   const { user, pharmacy, branch, branches } = await requirePharmacy();
   const [t, f, db, params] = await Promise.all([getT(), getFormat(pharmacy), getDb(), searchParams]);
-  const isAdmin = canSwitchBranch(user);
+  // Managers (and admins) get the review, history and drawer tabs.
+  const isAdmin = isManager(user);
   const tab: Tab =
     params.tab === "review" || params.tab === "history" || params.tab === "drawers"
       ? params.tab
@@ -104,7 +111,13 @@ export default async function CashDrawerPage({
     ? await db
         .select({ pending: count() })
         .from(cashReviews)
-        .where(and(eq(cashReviews.pharmacyId, pharmacy.id), eq(cashReviews.status, "pending")))
+        .where(
+          and(
+            eq(cashReviews.pharmacyId, pharmacy.id),
+            canSwitchBranch(user) ? undefined : eq(cashReviews.branchId, branch.id),
+            eq(cashReviews.status, "pending"),
+          ),
+        )
     : [{ pending: 0 }];
 
   return (
@@ -121,7 +134,7 @@ export default async function CashDrawerPage({
 
 async function DrawerTab({ ctx, close, handover }: { ctx: Ctx; close: boolean; handover?: string }) {
   const { db, branch, pharmacy, user, t, f } = ctx;
-  const isAdmin = canSwitchBranch(user);
+  const isAdmin = isManager(user);
   const state = await getDrawerState(db, branch, t("cashDrawer.defaultDrawerName"));
   if (!state.drawer) {
     return (
@@ -213,14 +226,19 @@ async function DrawerTab({ ctx, close, handover }: { ctx: Ctx; close: boolean; h
         shiftId={shift.id}
         staff={staff}
         ownerId={shift.openedBy}
-        floatAmount={drawer.floatAmount}
         initial={await lastCount(ctx, shift)}
       />
     );
   }
 
   const activity = await getShiftActivity(db, shift, ACTIVITY_LIMIT);
-  const managers = staff.filter((s) => s.role === "admin");
+  const managers = staff.filter((s) => s.role !== "staff");
+  const categories = await payoutCategories(db, pharmacy.id, [
+        t("cashDrawer.payOut_supplies"),
+        t("cashDrawer.payOut_transport"),
+        t("cashDrawer.payOut_cleaning"),
+        t("cashDrawer.payOut_other"),
+      ]);
   const minutes = Math.max(0, Math.floor((now().getTime() - shift.openedAt.getTime()) / 60_000));
 
   return (
@@ -241,7 +259,12 @@ async function DrawerTab({ ctx, close, handover }: { ctx: Ctx; close: boolean; h
         </div>
         <div className="flex flex-wrap gap-2">
           <PayInButton shiftId={shift.id} />
-          <PayOutButton shiftId={shift.id} approvalLimit={pharmacy.payoutApprovalLimit} managers={managers} />
+          <PayOutButton
+            shiftId={shift.id}
+            approvalLimit={pharmacy.payoutApprovalLimit}
+            managers={managers}
+            categories={categories}
+          />
           <CashDropButton shiftId={shift.id} />
           <NoSaleButton shiftId={shift.id} />
           <Link

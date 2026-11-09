@@ -10,7 +10,7 @@ import { getDb } from "@/db";
 import { cashDrawers, cashReviews, cashShifts, users, type CashCounts } from "@/db/schema";
 import type { MessageKey } from "@/i18n/messages";
 import { getT } from "@/i18n/server";
-import { canSwitchBranch } from "@/lib/active-branch";
+import { isManager } from "@/lib/active-branch";
 import { requirePharmacy } from "@/lib/auth";
 import { branchScope, inScope } from "@/lib/branches";
 import { denominationsFor } from "@/lib/cash-counts";
@@ -23,7 +23,8 @@ import { ActivityList } from "../shared";
 
 export const generateMetadata = pageTitle("cashDrawer.sessionTitle");
 
-const PRINT_PAGE_CSS = "@page { margin: 6mm 4mm; }";
+// Printed on the 80 mm receipt printer (72 mm printable); the paper size comes from its driver.
+const PRINT_PAGE_CSS = "@page { margin: 4mm; }";
 const PRINT_COLOURS =
   "print:[--card:#fff] print:[--card-foreground:#000] print:[--foreground:#000] " +
   "print:[--muted-foreground:#000] print:[--border:#000]";
@@ -85,7 +86,7 @@ export default async function CashSessionPage({
     .limit(1);
   if (!row) notFound();
   const { shift } = row;
-  const isAdmin = canSwitchBranch(user);
+  const isAdmin = isManager(user);
   const own = shift.openedBy === user.id || shift.closedBy === user.id;
   if (!isAdmin && (!own || !shift.closedAt)) notFound();
 
@@ -205,7 +206,7 @@ export default async function CashSessionPage({
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
         <article
-          className={`mx-auto w-full max-w-sm rounded-xl border border-border bg-card p-5 font-mono text-[13px] leading-snug text-card-foreground shadow-xs print:max-w-[80mm] print:rounded-none print:border-0 print:p-0 print:text-xs print:shadow-none ${PRINT_COLOURS}`}
+          className={`mx-auto w-full max-w-sm rounded-xl border border-border bg-card p-5 font-mono text-[13px] leading-snug text-card-foreground shadow-xs print:max-w-[72mm] print:rounded-none print:border-0 print:p-0 print:text-xs print:shadow-none ${PRINT_COLOURS}`}
         >
           <header className="text-center">
             <p className="font-semibold">{pharmacy.name}</p>

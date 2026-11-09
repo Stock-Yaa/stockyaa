@@ -11,6 +11,7 @@ import {
   NoSaleButton,
   PayInButton,
   PayOutButton,
+  type PayoutCategory,
   type ManagerOption,
 } from "../cash-drawer/session-actions";
 
@@ -21,12 +22,14 @@ import {
 export function DrawerBar({
   state,
   managers,
+  categories,
   approvalLimit,
   t,
   f,
 }: {
   state: DrawerState;
   managers: ManagerOption[];
+  categories: PayoutCategory[];
   approvalLimit: number;
   t: Awaited<ReturnType<typeof getT>>;
   f: Format;
@@ -74,7 +77,13 @@ export function DrawerBar({
       </div>
       <div className="flex flex-wrap gap-2">
         <PayInButton shiftId={shift.id} compact />
-        <PayOutButton shiftId={shift.id} approvalLimit={approvalLimit} managers={managers} compact />
+        <PayOutButton
+          shiftId={shift.id}
+          approvalLimit={approvalLimit}
+          managers={managers}
+          categories={categories}
+          compact
+        />
         <CashDropButton shiftId={shift.id} compact />
         <NoSaleButton shiftId={shift.id} compact />
         <Link

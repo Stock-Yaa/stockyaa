@@ -8,6 +8,7 @@ import {
   CreditCard,
   Package,
   PackageX,
+  Percent,
   RefreshCw,
   Store,
 } from "lucide-react";
@@ -67,6 +68,7 @@ const ICONS: Record<NotificationType, { icon: typeof Package; className: string 
   subscription_ended: { icon: CreditCard, className: "text-destructive" },
   subscription_ending: { icon: CreditCard, className: "text-info" },
   cash_review: { icon: Calculator, className: "text-warning" },
+  price_discount: { icon: Percent, className: "text-warning" },
 };
 
 /**

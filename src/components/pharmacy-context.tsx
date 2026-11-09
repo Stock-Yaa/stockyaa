@@ -9,7 +9,10 @@ export type PharmacyInfo = {
   name: string;
   currency: string;
   timezone: string;
-  taxRate: number;
+  /** VAT percentage included in prices; 0 when the pharmacy is not VAT-registered. */
+  vatRate: number;
+  /** Member and staff price rules (percent off) for products without their own price. */
+  priceRules: { memberDiscount: number | null; staffDiscount: number | null };
   /** The branch the user is working in. */
   branch: { id: string; name: string };
   /** Branches the user may switch to (only their own for staff). */

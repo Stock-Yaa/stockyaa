@@ -14,6 +14,7 @@ import { getFormat } from "@/lib/format-server";
 import { PAGE_SIZE, likePattern, pageCountOf, parsePage } from "@/lib/pagination";
 import { todayInTimezone } from "@/lib/dates";
 import { pageTitle } from "@/lib/metadata";
+import { priceFor } from "@/lib/pricing";
 import { photosOf } from "@/lib/product-images";
 import { getSellableStock } from "@/lib/stock";
 import { deleteProduct, setProductActive } from "./actions";
@@ -170,14 +171,15 @@ export default async function ProductsPage({
                     <TD>{categoryName ?? "—"}</TD>
                     <TD className="text-right tabular-nums">
                       {f.money(product.salePrice)}
-                      {product.memberPrice !== null && (
+                      {/* Its own price, or the pharmacy's rule for the level. */}
+                      {(product.memberPrice !== null || pharmacy.memberDiscount) && (
                         <p className="text-xs whitespace-nowrap text-muted-foreground">
-                          {t("products.memberShort")} {f.money(product.memberPrice)}
+                          {t("products.memberShort")} {f.money(priceFor(product, "member", pharmacy))}
                         </p>
                       )}
-                      {product.staffPrice !== null && (
+                      {(product.staffPrice !== null || pharmacy.staffDiscount) && (
                         <p className="text-xs whitespace-nowrap text-muted-foreground">
-                          {t("products.staffShort")} {f.money(product.staffPrice)}
+                          {t("products.staffShort")} {f.money(priceFor(product, "staff", pharmacy))}
                         </p>
                       )}
                     </TD>

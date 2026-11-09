@@ -13,10 +13,15 @@ import { TaxBuyerFields, buyerFrom, buyerReady, type TaxBuyer } from "../tax-buy
 /** "Issue tax receipt" for a sale without one; opens it once issued. */
 export function IssueTaxReceiptButton({
   saleId,
+  tooLate,
+  days,
   customer,
 }: {
   saleId: string;
-  customer: { name: string; taxId: string | null; taxBranch: string | null; address: string | null } | null;
+  /** The sale is older than the `days` a tax receipt can still be issued in. */
+  tooLate: boolean;
+  days: number;
+  customer: { name: string; taxIdType: "tax_id" | "passport"; taxId: string | null; taxBranch: string | null; address: string | null } | null;
 }) {
   const t = useT();
   const router = useRouter();
@@ -30,7 +35,12 @@ export function IssueTaxReceiptButton({
 
   return (
     <>
-      <Button variant="outline" onClick={() => setBuyer(buyerFrom(customer))}>
+      <Button
+        variant="outline"
+        onClick={() => setBuyer(buyerFrom(customer))}
+        disabled={tooLate}
+        title={tooLate ? t("taxReceipt.tooLateHint", { days }) : undefined}
+      >
         <FileText />
         {t("taxReceipt.issue")}
       </Button>

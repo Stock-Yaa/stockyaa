@@ -82,7 +82,18 @@ export function CustomerFormButton({ customer }: { customer?: Customer }) {
             error={errors.taxId}
             hint={t("taxReceipt.customerTaxIdHint")}
           >
-            <Input id="taxId" name="taxId" inputMode="numeric" maxLength={17} defaultValue={customer?.taxId ?? ""} />
+            <div className="flex gap-2">
+              <Select
+                name="taxIdType"
+                aria-label={t("taxReceipt.buyerIdType")}
+                defaultValue={customer?.taxIdType ?? "tax_id"}
+                className="w-36 shrink-0"
+              >
+                <option value="tax_id">{t("taxReceipt.idTypeTaxId")}</option>
+                <option value="passport">{t("taxReceipt.idTypePassport")}</option>
+              </Select>
+              <Input id="taxId" name="taxId" maxLength={24} defaultValue={customer?.taxId ?? ""} />
+            </div>
           </Field>
           <Field
             label={t("taxReceipt.buyerBranch")}

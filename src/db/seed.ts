@@ -36,6 +36,8 @@ export const DEMO_ACCOUNTS = {
   admin: { email: "admin@demo-pharmacy.com", password: "stockyaa123" },
   staff: { email: "staff@demo-pharmacy.com", password: "stockyaa123" },
 };
+// Manager of the Sukhumvit branch, same password as the other demo accounts.
+const DEMO_MANAGER_EMAIL = "manager@demo-pharmacy.com";
 
 type SeedOptions = {
   /** Also create a demo pharmacy with products, stock and sales. */
@@ -115,6 +117,9 @@ export async function seedDatabase(db: Db, options: SeedOptions): Promise<boolea
         phone: "02-123-4567",
         address: "123 Sukhumvit Road, Bangkok 10110",
         licenseNumber: "DEMO-0001",
+        taxId: "0105555012345",
+        vatRegistered: true,
+        memberDiscount: 5,
         timezone,
         planId: multiBranch.id,
         subscriptionStatus: "active",
@@ -129,8 +134,8 @@ export async function seedDatabase(db: Db, options: SeedOptions): Promise<boolea
     const [main, silom] = await tx
       .insert(branches)
       .values([
-        { pharmacyId, name: "Sukhumvit", address: pharmacy.address, phone: pharmacy.phone, createdAt: daysAgo(170) },
-        { pharmacyId, name: "Silom", address: "45 Silom Road, Bangkok 10500", phone: "02-234-5678", createdAt: daysAgo(60) },
+        { pharmacyId, name: "Sukhumvit", code: "SKV", taxBranchCode: "00000", address: pharmacy.address, phone: pharmacy.phone, createdAt: daysAgo(170) },
+        { pharmacyId, name: "Silom", code: "SLM", taxBranchCode: "00001", address: "45 Silom Road, Bangkok 10500", phone: "02-234-5678", createdAt: daysAgo(60) },
       ])
       .returning();
     await tx.insert(users).values({
@@ -140,6 +145,14 @@ export async function seedDatabase(db: Db, options: SeedOptions): Promise<boolea
       role: "staff",
       pharmacyId,
       branchId: silom.id,
+    });
+    await tx.insert(users).values({
+      name: "Demo Manager",
+      email: DEMO_MANAGER_EMAIL,
+      passwordHash: await hash(DEMO_ACCOUNTS.staff.password, 10),
+      role: "manager",
+      pharmacyId,
+      branchId: main.id,
     });
 
     const [admin] = await tx
@@ -257,7 +270,7 @@ export async function seedDatabase(db: Db, options: SeedOptions): Promise<boolea
     }
 
     // One received purchase and one still on order.
-    const receivedRef = await nextPurchaseReference(tx, pharmacyId);
+    const receivedRef = await nextPurchaseReference(tx, pharmacyId, today, main.id);
     const receivedLines = [productRows[0], productRows[3], productRows[5]].map((p) => ({
       product: p,
       quantity: 100,
@@ -302,7 +315,7 @@ export async function seedDatabase(db: Db, options: SeedOptions): Promise<boolea
       });
     }
 
-    const orderedRef = await nextPurchaseReference(tx, pharmacyId);
+    const orderedRef = await nextPurchaseReference(tx, pharmacyId, today, main.id);
     const [ordered] = await tx
       .insert(purchases)
       .values({
@@ -343,7 +356,7 @@ export async function seedDatabase(db: Db, options: SeedOptions): Promise<boolea
         // About a third of the sales happen in Silom.
         const branchId = random() < 0.35 ? silom.id : main.id;
         const subtotal = round2(lines.reduce((s, l) => s + l.quantity * l.product.salePrice, 0));
-        const invoiceNumber = await nextInvoiceNumber(tx, pharmacyId, today);
+        const invoiceNumber = await nextInvoiceNumber(tx, pharmacyId, today, branchId);
         const [sale] = await tx
           .insert(sales)
           .values({
@@ -353,6 +366,8 @@ export async function seedDatabase(db: Db, options: SeedOptions): Promise<boolea
             customerId: random() < 0.3 ? customerRows[Math.floor(random() * customerRows.length)].id : null,
             userId: admin.id,
             subtotal,
+            // Prices include 7% VAT.
+            tax: round2((subtotal * 7) / 107),
             total: subtotal,
             paymentMethod: methods[Math.floor(random() * methods.length)],
             amountPaid: subtotal,
@@ -527,7 +542,7 @@ async function seedTransfer(
     receive: boolean;
   },
 ) {
-  const reference = await nextTransferReference(tx, input.pharmacyId);
+  const reference = await nextTransferReference(tx, input.pharmacyId, input.today, input.from);
   const [transfer] = await tx
     .insert(stockTransfers)
     .values({

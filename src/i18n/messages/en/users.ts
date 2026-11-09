@@ -49,6 +49,7 @@ const users = {
   pinMismatch: "The PINs do not match.",
   myPinTitle: "Cash drawer PIN",
   myPinDescription: "You enter this PIN to open, count and close a cash drawer, and to approve as a manager.",
+  roleManager: "Manager",
 };
 
 export default users;

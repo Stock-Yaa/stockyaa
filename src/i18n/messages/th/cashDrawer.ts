@@ -27,7 +27,7 @@ const cashDrawer: typeof en = {
   pinLocked: "ใส่ PIN ผิดหลายครั้งเกินไป ลองใหม่ใน 15 นาที หรือให้ผู้จัดการตั้ง PIN ใหม่",
   pinNotSet: "ผู้ใช้นี้ยังไม่มี PIN ตั้งได้ที่หน้าผู้ใช้หรือหน้าโปรไฟล์",
   pinUserNotFound: "ผู้ใช้นี้ใช้ลิ้นชักนี้ไม่ได้",
-  managerOnly: "เฉพาะผู้จัดการ (แอดมิน) เท่านั้นที่อนุมัติได้",
+  managerOnly: "เฉพาะผู้จัดการหรือแอดมินเท่านั้นที่ทำรายการนี้ได้",
 
   // Opening
   openTitle: "เปิดกะ",
@@ -151,7 +151,7 @@ const cashDrawer: typeof en = {
   reasonExample: "เช่น ทอนเงินลูกค้าผิดตอน 14:10",
   reasonRequired: "อธิบายสาเหตุที่ยอดไม่ตรง",
   closingDrop: "นำเข้าตู้เซฟตอนนี้",
-  closingDropHint: "เงินทอนที่ต้องเก็บไว้: {float} เหลือในลิ้นชัก: {left}",
+  closingDropHint: "ไม่บังคับ เงินที่เหลือในลิ้นชัก ({left}) กะถัดไปจะนับต่อ",
   dropTooLarge: "นำออกได้ไม่เกินยอดที่นับได้",
   willReview: "กะนี้จะถูกส่งเข้าคิวรอตรวจสอบของผู้จัดการ",
   willBlock: "ระบบจะแจ้งผู้จัดการ และลิ้นชักนี้จะถูกล็อกจนกว่าผู้จัดการจะตัดสินใจ",
@@ -237,8 +237,6 @@ const cashDrawer: typeof en = {
   editDrawer: "แก้ไขลิ้นชัก",
   drawerNameHint: "เช่น ลิ้นชัก 2: โต๊ะให้คำปรึกษา",
   drawerNameTaken: "สาขานี้มีลิ้นชักชื่อนี้แล้ว",
-  floatAmount: "เงินทอนตั้งต้น",
-  floatAmountHint: "เงินทอนที่เก็บไว้ในลิ้นชักระหว่างกะ ส่วนที่เหลือนำเข้าตู้เซฟตอนปิดกะ",
   currentSession: "กะปัจจุบัน",
   noSession: "ปิดอยู่",
   deactivate: "ปิดใช้งาน",
@@ -250,6 +248,10 @@ const cashDrawer: typeof en = {
   drawerInUse: "ปิดกะของลิ้นชักนี้ก่อน",
   drawerActivated: "เปิดใช้งานลิ้นชักแล้ว",
   drawerDeactivated: "ปิดใช้งานลิ้นชักแล้ว",
+  payOutCategoryHint: "รายการจ่ายออกจะบันทึกเป็นค่าใช้จ่ายในหมวดนี้ด้วย",
+  rejectedPayouts: "รายการจ่ายออกที่ไม่อนุมัติ ({days} วันล่าสุด)",
+  rejectedTitle: "{name}: จ่ายออกไม่อนุมัติ {count} รายการ",
+  rejectedTotal: "รวม {amount} บันทึกไว้ในประวัติของพนักงานคนนี้",
 };
 
 export default cashDrawer;

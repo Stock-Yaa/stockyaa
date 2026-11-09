@@ -84,7 +84,7 @@ const products: typeof en = {
   deleteCategoryBody: "สินค้าในหมวดหมู่นี้จะยังอยู่ แต่จะกลายเป็นสินค้าที่ไม่มีหมวดหมู่",
   memberPriceWithCurrency: "ราคาสมาชิก ({currency})",
   staffPriceWithCurrency: "ราคาพนักงาน ({currency})",
-  levelPriceHint: "เว้นว่างไว้เพื่อใช้ราคาปกติ",
+  levelPriceHint: "เว้นว่างไว้เพื่อใช้กฎในหน้าตั้งค่า (ลด % จากราคาปกติ) หรือราคาปกติ",
   memberShort: "สมาชิก",
   staffShort: "พนักงาน",
   photos: "รูปภาพ",

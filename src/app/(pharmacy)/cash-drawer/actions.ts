@@ -7,11 +7,12 @@ import { z } from "zod";
 import { getDb, type DbOrTx } from "@/db";
 import {
   PAY_IN_CATEGORIES,
-  PAY_OUT_CATEGORIES,
   cashDrawers,
   cashMovements,
   cashReviews,
   cashShifts,
+  expenseCategories,
+  expenses,
   notifications,
   users,
   type Branch,
@@ -21,7 +22,7 @@ import {
 import type { MessageKey } from "@/i18n/messages";
 import { getT } from "@/i18n/server";
 import { fieldErrorsFrom, type ActionState } from "@/lib/action";
-import { branchChanged, canSwitchBranch } from "@/lib/active-branch";
+import { branchChanged, canSwitchBranch, isManager } from "@/lib/active-branch";
 import { requirePharmacy } from "@/lib/auth";
 import { cleanCounts, countsTotal, denominationsFor } from "@/lib/cash-counts";
 import {
@@ -35,6 +36,7 @@ import {
   type ShiftTotals,
 } from "@/lib/cash-drawer";
 import { canRecount, cashRulesOf, varianceLevel, type VarianceLevel } from "@/lib/cash-rules";
+import { todayInTimezone } from "@/lib/dates";
 import { isUniqueViolation } from "@/lib/db-error";
 import { checkPin } from "@/lib/pin";
 import { StorageNotConfiguredError, putFile } from "@/lib/storage";
@@ -283,7 +285,7 @@ export async function addPayIn(formData: FormData): Promise<ActionState> {
 
 const payOutSchema = z.object({
   shiftId: requiredId,
-  category: z.enum(PAY_OUT_CATEGORIES, { error: "common.invalidChoice" }),
+  categoryId: requiredId,
   amount: positiveAmount,
   note: requiredText(200),
   managerId: optionalId,
@@ -292,8 +294,10 @@ const payOutSchema = z.object({
 });
 
 /**
- * A petty cost paid from the drawer, with a photo of the receipt. Above the
- * approval limit a manager types their PIN, or it goes to their review queue.
+ * A petty cost paid from the drawer, with a photo of the receipt. It is also
+ * booked as an expense of the branch in the chosen category, so it shows in
+ * the Expenses report. Above the approval limit a manager types their PIN, or
+ * it goes to their review queue.
  */
 export async function addPayOut(formData: FormData): Promise<ActionState> {
   const { user, pharmacy, branch } = await requirePharmacy();
@@ -301,7 +305,7 @@ export async function addPayOut(formData: FormData): Promise<ActionState> {
   if (branchChanged(formData, branch)) return fail(t("branches.changedElsewhere"));
   const parsed = payOutSchema.safeParse(formToObject(formData));
   if (!parsed.success) return invalid(parsed.error, t);
-  const { shiftId, category, note, managerId, managerPin, requestApproval } = parsed.data;
+  const { shiftId, categoryId, note, managerId, managerPin, requestApproval } = parsed.data;
   const value = round2(parsed.data.amount);
 
   const receipt = formData.get("receipt");
@@ -314,6 +318,11 @@ export async function addPayOut(formData: FormData): Promise<ActionState> {
   }
 
   const db = await getDb();
+  const [category] = await db
+    .select({ id: expenseCategories.id })
+    .from(expenseCategories)
+    .where(and(eq(expenseCategories.id, categoryId), eq(expenseCategories.pharmacyId, pharmacy.id)));
+  if (!category) return { ok: false, fieldErrors: { categoryId: t("common.invalidChoice") } };
   const rules = cashRulesOf(pharmacy);
   let approvedBy: string | null = null;
   let needsReview = false;
@@ -323,7 +332,8 @@ export async function addPayOut(formData: FormData): Promise<ActionState> {
         pharmacyId: pharmacy.id,
         userId: managerId,
         pin: managerPin,
-        adminOnly: true,
+        branch,
+        managerOnly: true,
       });
       if (!pin.ok) return { ok: false, fieldErrors: { managerPin: t(pin.error) } };
       approvedBy = pin.user.id;
@@ -345,13 +355,25 @@ export async function addPayOut(formData: FormData): Promise<ActionState> {
   }
 
   const done = await withOpenShift(branch, shiftId, async (tx, shift) => {
+    const [expense] = await tx
+      .insert(expenses)
+      .values({
+        pharmacyId: pharmacy.id,
+        branchId: branch.id,
+        categoryId: category.id,
+        expenseDate: todayInTimezone(pharmacy.timezone),
+        amount: value,
+        description: note,
+        userId: user.id,
+      })
+      .returning({ id: expenses.id });
     const [movement] = await tx
       .insert(cashMovements)
       .values({
         pharmacyId: pharmacy.id,
         shiftId: shift.id,
         type: "out",
-        category,
+        expenseId: expense.id,
         amount: value,
         reason: note,
         receiptPath,
@@ -504,7 +526,7 @@ export async function submitCount(formData: FormData): Promise<CountResult> {
       .for("update");
     if (!shift) return { ok: false, message: t("cashDrawer.notOpen") };
     // The person accountable for the drawer counts it, or a manager does.
-    if (pin.user.id !== shift.openedBy && pin.user.role !== "admin") {
+    if (pin.user.id !== shift.openedBy && pin.user.role === "staff") {
       return { ok: false, fieldErrors: { userId: t("cashDrawer.ownerOrManager") } };
     }
 
@@ -659,11 +681,11 @@ const reviewSchema = z.object({
   note: optionalText(500),
 });
 
-/** Approves or rejects an item of the review queue (any branch of the pharmacy). */
+/** Approves or rejects an item of the review queue (an admin: any branch; a manager: their own). */
 export async function decideReview(formData: FormData): Promise<ActionState> {
-  const { user, pharmacy } = await requirePharmacy();
+  const { user, pharmacy, branch } = await requirePharmacy();
   const t = await getT();
-  if (!canSwitchBranch(user)) return fail(t("common.adminOnly"));
+  if (!isManager(user)) return fail(t("cashDrawer.managerOnly"));
   const parsed = reviewSchema.safeParse(formToObject(formData));
   if (!parsed.success) return invalid(parsed.error, t);
   const { reviewId, decision, note } = parsed.data;
@@ -679,6 +701,7 @@ export async function decideReview(formData: FormData): Promise<ActionState> {
       and(
         eq(cashReviews.id, reviewId),
         eq(cashReviews.pharmacyId, pharmacy.id),
+        canSwitchBranch(user) ? undefined : eq(cashReviews.branchId, branch.id),
         eq(cashReviews.status, "pending"),
       ),
     )
@@ -707,9 +730,9 @@ const forceCloseSchema = z.object({ shiftId: requiredId, note: requiredText(500)
  * The result is recorded as already reviewed by them.
  */
 export async function forceClose(formData: FormData): Promise<ActionState> {
-  const { user, pharmacy } = await requirePharmacy();
+  const { user, pharmacy, branch } = await requirePharmacy();
   const t = await getT();
-  if (!canSwitchBranch(user)) return fail(t("common.adminOnly"));
+  if (!isManager(user)) return fail(t("cashDrawer.managerOnly"));
   const parsed = forceCloseSchema.safeParse(formToObject(formData));
   if (!parsed.success) return invalid(parsed.error, t);
   const count = readCount(formData, pharmacy);
@@ -718,7 +741,7 @@ export async function forceClose(formData: FormData): Promise<ActionState> {
   const rules = cashRulesOf(pharmacy);
   const db = await getDb();
   const closed = await db.transaction(async (tx) => {
-    // Admins work in every branch: any open session of the pharmacy.
+    // Admins work in every branch (any open session of the pharmacy); managers in theirs.
     const [shift] = await tx
       .select()
       .from(cashShifts)
@@ -726,6 +749,7 @@ export async function forceClose(formData: FormData): Promise<ActionState> {
         and(
           eq(cashShifts.id, parsed.data.shiftId),
           eq(cashShifts.pharmacyId, pharmacy.id),
+          canSwitchBranch(user) ? undefined : eq(cashShifts.branchId, branch.id),
           isNull(cashShifts.closedAt),
         ),
       )
@@ -798,26 +822,24 @@ export async function forceClose(formData: FormData): Promise<ActionState> {
 const drawerSchema = z.object({
   id: optionalId,
   name: requiredText(60),
-  floatAmount: amount,
 });
 
-/** Adds a drawer to the current branch, or renames one / changes its float. */
+/** Adds a drawer to the current branch, or renames one. */
 export async function saveDrawer(formData: FormData): Promise<ActionState> {
   const { user, pharmacy, branch } = await requirePharmacy();
   const t = await getT();
-  if (!canSwitchBranch(user)) return fail(t("common.adminOnly"));
+  if (!isManager(user)) return fail(t("cashDrawer.managerOnly"));
   if (branchChanged(formData, branch)) return fail(t("branches.changedElsewhere"));
   const parsed = drawerSchema.safeParse(formToObject(formData));
   if (!parsed.success) return invalid(parsed.error, t);
   const { id, name } = parsed.data;
-  const floatAmount = round2(parsed.data.floatAmount);
 
   const db = await getDb();
   try {
     if (id) {
       const updated = await db
         .update(cashDrawers)
-        .set({ name, floatAmount })
+        .set({ name })
         .where(
           and(
             eq(cashDrawers.id, id),
@@ -830,7 +852,7 @@ export async function saveDrawer(formData: FormData): Promise<ActionState> {
     } else {
       await db
         .insert(cashDrawers)
-        .values({ pharmacyId: pharmacy.id, branchId: branch.id, name, floatAmount });
+        .values({ pharmacyId: pharmacy.id, branchId: branch.id, name });
     }
   } catch (error) {
     if (isUniqueViolation(error)) {
@@ -850,7 +872,7 @@ export async function setDrawerActive(
 ): Promise<ActionState> {
   const { user, pharmacy, branch } = await requirePharmacy();
   const t = await getT();
-  if (!canSwitchBranch(user)) return fail(t("common.adminOnly"));
+  if (!isManager(user)) return fail(t("cashDrawer.managerOnly"));
   if (activeBranchId !== branch.id) return fail(t("branches.changedElsewhere"));
   if (!requiredId.safeParse(drawerId).success) return fail(t("common.notFound"));
 

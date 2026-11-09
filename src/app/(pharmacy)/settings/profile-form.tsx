@@ -18,7 +18,10 @@ export type PharmacyProfile = Pick<
   | "taxId"
   | "currency"
   | "timezone"
+  | "vatRegistered"
   | "taxRate"
+  | "memberDiscount"
+  | "staffDiscount"
   | "expiryAlertDays"
   | "receiptFooter"
 >;
@@ -92,6 +95,18 @@ export function ProfileForm({
           ))}
         </Select>
       </Field>
+      <label className="flex items-start gap-2 text-sm sm:col-span-2">
+        <input
+          type="checkbox"
+          name="vatRegistered"
+          defaultChecked={profile.vatRegistered}
+          className="mt-0.5 size-4 accent-primary"
+        />
+        <span>
+          <span className="font-medium">{t("settings.vatRegistered")}</span>
+          <span className="block text-muted-foreground">{t("settings.vatRegisteredHint")}</span>
+        </span>
+      </label>
       <Field
         label={t("settings.taxRate")}
         htmlFor="taxRate"
@@ -128,6 +143,42 @@ export function ProfileForm({
           step={1}
           defaultValue={profile.expiryAlertDays}
           required
+        />
+      </Field>
+      <Field
+        label={t("settings.memberDiscount")}
+        htmlFor="memberDiscount"
+        error={errors.memberDiscount}
+        hint={t("settings.levelDiscountHint")}
+      >
+        <Input
+          id="memberDiscount"
+          name="memberDiscount"
+          type="number"
+          inputMode="decimal"
+          min={0}
+          max={100}
+          step="0.01"
+          placeholder="5"
+          defaultValue={profile.memberDiscount ?? ""}
+        />
+      </Field>
+      <Field
+        label={t("settings.staffDiscount")}
+        htmlFor="staffDiscount"
+        error={errors.staffDiscount}
+        hint={t("settings.levelDiscountHint")}
+      >
+        <Input
+          id="staffDiscount"
+          name="staffDiscount"
+          type="number"
+          inputMode="decimal"
+          min={0}
+          max={100}
+          step="0.01"
+          placeholder="10"
+          defaultValue={profile.staffDiscount ?? ""}
         />
       </Field>
       <Field

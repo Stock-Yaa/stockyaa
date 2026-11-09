@@ -3,8 +3,8 @@
 import { and, eq, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { getDb } from "@/db";
-import { EXPENSE_COLORS, expenseCategories, expenses } from "@/db/schema";
+import { getDb, type DbOrTx } from "@/db";
+import { EXPENSE_COLORS, cashMovements, expenseCategories, expenses } from "@/db/schema";
 import type { MessageKey } from "@/i18n/messages";
 import { getT } from "@/i18n/server";
 import { fieldErrorsFrom, type ActionState } from "@/lib/action";
@@ -36,6 +36,11 @@ const expenseSchema = z.object({
     .refine((v) => v <= MAX_MONEY, "common.invalidNumber"),
   description: requiredText(500),
 });
+
+/** A pay-out from a cash drawer: its expense follows the drawer and is not edited here. */
+async function fromDrawer(db: DbOrTx, expenseId: string): Promise<boolean> {
+  return (await db.$count(cashMovements, eq(cashMovements.expenseId, expenseId))) > 0;
+}
 
 /**
  * Creates an expense, or updates it when the form carries an `id`. Staff
@@ -81,6 +86,7 @@ export async function saveExpense(formData: FormData): Promise<ActionState> {
     return { ok: false, fieldErrors: { categoryId: t("expenses.categoryMissing") } };
   }
 
+  if (id && (await fromDrawer(db, id))) return { ok: false, message: t("expenses.fromDrawer") };
   if (id) {
     // Only an expense the user can see: staff cannot edit whole-business ones.
     const updated = await db
@@ -109,6 +115,7 @@ export async function deleteExpense(id: string, branchId: string): Promise<Actio
   if (!parsedId.success) return { ok: false, message: t("common.notFound") };
 
   const db = await getDb();
+  if (await fromDrawer(db, parsedId.data)) return { ok: false, message: t("expenses.fromDrawer") };
   await db
     .delete(expenses)
     .where(and(eq(expenses.id, parsedId.data), visibleExpenses(expenseScope(user, branch))));

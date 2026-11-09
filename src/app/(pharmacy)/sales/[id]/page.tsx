@@ -6,7 +6,7 @@ import { buttonClass } from "@/components/ui/button";
 import { ConfirmButton } from "@/components/ui/confirm-button";
 import { PageHeader } from "@/components/ui/page";
 import { getDb } from "@/db";
-import { customers, saleItems, sales, taxInvoices, users } from "@/db/schema";
+import { creditNotes, customers, saleItems, sales, taxInvoices, users } from "@/db/schema";
 import { getT } from "@/i18n/server";
 import { requirePharmacy } from "@/lib/auth";
 import { branchScope, inScope } from "@/lib/branches";
@@ -14,17 +14,21 @@ import { getDrawerState } from "@/lib/cash-drawer";
 import { getFormat } from "@/lib/format-server";
 import { pageTitle } from "@/lib/metadata";
 import { PRICE_LEVEL_LABEL } from "@/lib/price-labels";
+import { HEAD_OFFICE, TAX_RECEIPT_DAYS, taxReceiptAllowed } from "@/lib/tax-invoice";
 import { round2 } from "@/lib/utils";
 import { requiredId } from "@/lib/validation";
+import { amountBeforeVat } from "@/lib/vat";
 import { refundSale } from "../actions";
 import { PAYMENT_METHOD_LABEL } from "../labels";
 import { PrintButton } from "./print-button";
+import { saleVatRate } from "./tax-document";
 import { IssueTaxReceiptButton } from "./tax-receipt-button";
 
 export const generateMetadata = pageTitle("sales.receipt");
 
-// Small page margins so the receipt also fits 58 mm and 80 mm thermal paper.
-const PRINT_PAGE_CSS = "@page { margin: 6mm 4mm; }";
+
+// Printed on the 80 mm receipt printer (72 mm printable); the paper size comes from its driver.
+const PRINT_PAGE_CSS = "@page { margin: 4mm; }";
 
 // On paper the receipt is always black on white, whatever the screen theme:
 // the colour tokens are redefined for everything inside it when printing.
@@ -56,11 +60,13 @@ export default async function SaleReceiptPage({
     .select({
       sale: sales,
       customerName: customers.name,
+      customerTaxIdType: customers.taxIdType,
       customerTaxId: customers.taxId,
       customerTaxBranch: customers.taxBranch,
       customerAddress: customers.address,
       cashierName: users.name,
       taxNumber: taxInvoices.number,
+      creditNumber: creditNotes.number,
     })
     .from(sales)
     .leftJoin(
@@ -69,10 +75,14 @@ export default async function SaleReceiptPage({
     )
     .leftJoin(users, and(eq(sales.userId, users.id), eq(users.pharmacyId, pharmacy.id)))
     .leftJoin(taxInvoices, and(eq(taxInvoices.saleId, sales.id), eq(taxInvoices.pharmacyId, pharmacy.id)))
+    .leftJoin(creditNotes, and(eq(creditNotes.saleId, sales.id), eq(creditNotes.pharmacyId, pharmacy.id)))
     .where(and(eq(sales.id, id), inScope(sales, branchScope(branch))))
     .limit(1);
   if (!row) notFound();
-  const { sale, customerName, cashierName, taxNumber } = row;
+  const { sale, customerName, cashierName, taxNumber, creditNumber } = row;
+  // A VAT sale's receipt is an abbreviated tax invoice (ใบกำกับภาษีอย่างย่อ).
+  const vatSale = sale.tax > 0 && sale.taxIncluded;
+  const vatRate = saleVatRate(sale, pharmacy);
 
   // A cash refund is paid from this device's drawer, while its session is open.
   const drawer =
@@ -134,7 +144,14 @@ export default async function SaleReceiptPage({
   }
   const totals: LabelledValue[] = [[t("sales.subtotal"), f.money(sale.subtotal)]];
   if (sale.discount > 0) totals.push([t("sales.discount"), `−${f.money(sale.discount)}`]);
-  if (sale.tax > 0) totals.push([t("sales.tax"), f.money(sale.tax)]);
+  // Sales from before VAT-inclusive prices had their VAT added on top.
+  if (sale.tax > 0 && !sale.taxIncluded) totals.push([t("sales.tax"), f.money(sale.tax)]);
+  const vatLines: LabelledValue[] = vatSale
+    ? [
+        [t("sales.beforeVat"), f.money(amountBeforeVat(sale))],
+        [t("sales.vatIncluded", { rate: f.number(vatRate) }), f.money(sale.tax)],
+      ]
+    : [];
   const payment: LabelledValue[] = [
     [t("sales.paymentMethod"), t(PAYMENT_METHOD_LABEL[sale.paymentMethod])],
     [t("sales.paid"), f.money(sale.amountPaid)],
@@ -174,13 +191,17 @@ export default async function SaleReceiptPage({
             {t("taxReceipt.view", { number: taxNumber })}
           </Link>
         ) : (
-          sale.status === "completed" && (
+          sale.status === "completed" &&
+          pharmacy.vatRegistered && (
             <IssueTaxReceiptButton
               saleId={sale.id}
+              tooLate={!taxReceiptAllowed(sale.createdAt)}
+              days={TAX_RECEIPT_DAYS}
               customer={
                 customerName
                   ? {
                       name: customerName,
+                      taxIdType: row.customerTaxIdType ?? "tax_id",
                       taxId: row.customerTaxId,
                       taxBranch: row.customerTaxBranch,
                       address: row.customerAddress,
@@ -190,11 +211,17 @@ export default async function SaleReceiptPage({
             />
           )
         )}
+        {creditNumber && (
+          <Link href={`/sales/${sale.id}/credit-note`} className={buttonClass({ variant: "outline" })}>
+            <FileText />
+            {t("taxReceipt.viewCredit", { number: creditNumber })}
+          </Link>
+        )}
         <PrintButton auto={print === "1"} />
       </PageHeader>
 
       <article
-        className={`mx-auto w-full max-w-sm rounded-xl border border-border bg-card p-6 text-sm text-card-foreground shadow-xs print:max-w-[80mm] print:rounded-none print:border-0 print:p-0 print:text-xs print:shadow-none ${PRINT_COLOURS}`}
+        className={`mx-auto w-full max-w-sm rounded-xl border border-border bg-card p-6 text-sm text-card-foreground shadow-xs print:max-w-[72mm] print:rounded-none print:border-0 print:p-0 print:text-xs print:shadow-none ${PRINT_COLOURS}`}
       >
         <header className="text-center">
           <p className="text-base font-semibold">{pharmacy.name}</p>
@@ -208,6 +235,14 @@ export default async function SaleReceiptPage({
           {pharmacy.taxId && (
             <p>
               {t("sales.taxId")}: {pharmacy.taxId}
+              {vatSale && branch.taxBranchCode && (
+                <>
+                  {" · "}
+                  {branch.taxBranchCode === HEAD_OFFICE
+                    ? t("taxReceipt.headOffice")
+                    : t("taxReceipt.branchNo", { code: branch.taxBranchCode })}
+                </>
+              )}
             </p>
           )}
           {pharmacy.licenseNumber && (
@@ -215,7 +250,9 @@ export default async function SaleReceiptPage({
               {t("sales.license")}: {pharmacy.licenseNumber}
             </p>
           )}
-          <p className="mt-3 font-semibold tracking-wide uppercase">{t("sales.receipt")}</p>
+          <p className="mt-3 font-semibold tracking-wide uppercase">
+            {vatSale ? t("sales.abbTaxInvoice") : t("sales.receipt")}
+          </p>
         </header>
 
         {sale.status === "refunded" && (
@@ -276,6 +313,12 @@ export default async function SaleReceiptPage({
             <dt>{t("sales.total")}</dt>
             <dd className="tabular-nums">{f.money(sale.total)}</dd>
           </div>
+          {vatLines.map(([label, value]) => (
+            <div key={label} className="flex justify-between gap-3 text-muted-foreground">
+              <dt>{label}</dt>
+              <dd className="tabular-nums">{value}</dd>
+            </div>
+          ))}
         </dl>
 
         <div className={DIVIDER} />

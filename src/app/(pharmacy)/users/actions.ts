@@ -35,7 +35,7 @@ const passwordField = z
   .min(8, "users.passwordTooShort")
   .refine((v) => !truncates(v), "common.tooLong");
 
-const pharmacyRole = z.enum(["admin", "staff"], { error: "common.invalidChoice" });
+const pharmacyRole = z.enum(["admin", "manager", "staff"], { error: "common.invalidChoice" });
 
 const userSchema = z.object({
   id: optionalId,
@@ -95,8 +95,8 @@ async function adminLimitReached(
 
 /**
  * Creates a user (with a password), or updates one when the form carries an
- * `id`. Staff must work in an active branch of the pharmacy; admins work in
- * every branch, so their branch is cleared.
+ * `id`. Managers and staff must work in an active branch of the pharmacy;
+ * admins work in every branch, so their branch is cleared.
  */
 export async function saveUser(formData: FormData): Promise<ActionState> {
   const { user: me, pharmacy } = await requirePharmacy();
@@ -111,9 +111,9 @@ export async function saveUser(formData: FormData): Promise<ActionState> {
     };
   }
   const { id, name, email, role, password } = parsed.data;
-  const branchId = role === "staff" ? parsed.data.branchId : null;
+  const branchId = role === "admin" ? null : parsed.data.branchId;
   if (!id && !password) return { ok: false, fieldErrors: { password: t("common.required") } };
-  if (role === "staff" && !branchId) {
+  if (role !== "admin" && !branchId) {
     return { ok: false, fieldErrors: { branchId: t("users.branchRequired") } };
   }
   if (id === me.id && role !== me.role) return { ok: false, message: t("users.notYourself") };
@@ -277,8 +277,8 @@ export async function setUserActive(userId: string, isActive: boolean): Promise<
     if (active && target.role === "admin" && (await adminLimitReached(tx, pharmacy, targetId))) {
       return "users.adminLimit";
     }
-    // Staff can only be activated into a branch that is itself active.
-    if (active && target.role === "staff") {
+    // Managers and staff can only be activated into a branch that is itself active.
+    if (active && target.role !== "admin") {
       const [branch] = target.branchId
         ? await tx
             .select({ isActive: branches.isActive })

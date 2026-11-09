@@ -104,7 +104,7 @@ export function ForceCloseButton({ shiftId }: { shiftId: string }) {
 export function DrawerFormButton({
   drawer,
 }: {
-  drawer?: { id: string; name: string; floatAmount: number };
+  drawer?: { id: string; name: string };
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -131,25 +131,6 @@ export function DrawerFormButton({
           {drawer && <input type="hidden" name="id" value={drawer.id} />}
           <Field label={t("common.name")} htmlFor="drawer-name" error={errors.name} hint={t("cashDrawer.drawerNameHint")} required>
             <Input id="drawer-name" name="name" defaultValue={drawer?.name} maxLength={60} required autoFocus />
-          </Field>
-          <Field
-            label={t("cashDrawer.floatAmount")}
-            htmlFor="floatAmount"
-            error={errors.floatAmount}
-            hint={t("cashDrawer.floatAmountHint")}
-            required
-          >
-            <Input
-              id="floatAmount"
-              name="floatAmount"
-              type="number"
-              inputMode="decimal"
-              min={0}
-              step="0.01"
-              defaultValue={drawer?.floatAmount ?? 2000}
-              required
-              className="text-right tabular-nums"
-            />
           </Field>
           <ModalFooter>
             <Button variant="outline" onClick={() => setOpen(false)} disabled={pending}>
