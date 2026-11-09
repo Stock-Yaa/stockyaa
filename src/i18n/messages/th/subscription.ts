@@ -19,6 +19,7 @@ const subscription: typeof en = {
   validUntil: "ใช้ได้ถึง",
   noEndDate: "ไม่มีวันหมดอายุ",
   daysLeft: "เหลืออีก {days} วัน",
+  daysLeftOne: "เหลืออีก {days} วัน",
   lastDay: "เหลือไม่ถึง 1 วัน",
   endedOn: "หมดอายุเมื่อ {date}",
   accessBlockedTitle: "การใช้งานถูกพักไว้",

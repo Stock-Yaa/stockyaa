@@ -35,9 +35,11 @@ const forecast = {
   actionSufficient: "Stock is sufficient",
   orderAbout: "Order about {qty} {unit}",
   empty: "No sales to forecast from yet",
-  emptyHint: "Forecasts appear once products have sales in the last {days} days.",
+  emptyHint:
+    "Forecasts use whole days of sales from the last {days} days. Sales made today count from tomorrow, once the day is complete.",
   emptyFiltered: "No products in this group",
   notShown: "{count} active products with no sales in the last {days} days are not shown.",
+  notShownOne: "1 active product with no sales in the last {days} days is not shown.",
 };
 
 export default forecast;

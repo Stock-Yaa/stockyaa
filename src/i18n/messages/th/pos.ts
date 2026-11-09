@@ -17,6 +17,7 @@ const pos: typeof en = {
   maxStock: "{name} เหลือในสต็อกเพียง {count}",
   cart: "ตะกร้าสินค้า",
   cartCount: "{count} ชิ้น",
+  cartCountOne: "{count} ชิ้น",
   cartEmpty: "สแกนหรือค้นหาเพื่อเพิ่มสินค้า",
   cartEmptyHint: "กด F1 เพื่อไปที่ช่องค้นหา",
   clearCart: "ล้างตะกร้า",

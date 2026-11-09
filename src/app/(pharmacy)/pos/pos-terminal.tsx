@@ -141,6 +141,9 @@ export function PosTerminal({
   const [taxBuyer, setTaxBuyer] = useState<TaxBuyer | null>(null);
   const [buyerDraft, setBuyerDraft] = useState<TaxBuyer | null>(null);
   const [pending, startTransition] = useTransition();
+  // Set at once on the first "Complete sale", before `pending` re-renders, so
+  // a scanner Enter and a click in the same instant make one sale, not two.
+  const submittingRef = useRef(false);
 
   // F1 jumps to the product search from anywhere on the screen.
   useEffect(() => {
@@ -270,7 +273,9 @@ export function PosTerminal({
     // Barcode scanners type the code and then press Enter.
     const code = event.currentTarget.value.trim();
     if (!code) return;
-    const match = products.find((p) => p.barcode === code);
+    // Should two products still share a barcode, prefer the one with stock.
+    const matches = products.filter((p) => p.barcode === code);
+    const match = matches.find((p) => p.stock > 0) ?? matches[0];
     if (match) {
       addProduct(match);
       setQuery("");
@@ -281,7 +286,8 @@ export function PosTerminal({
   }
 
   function completeSale() {
-    if (!canComplete) return;
+    if (!canComplete || submittingRef.current) return;
+    submittingRef.current = true;
     const payload: SalePayload = {
       branchId: branch.id,
       items: lines.map((line) => ({ productId: line.product.id, quantity: line.quantity })),
@@ -319,6 +325,8 @@ export function PosTerminal({
       } catch (error) {
         unstable_rethrow(error);
         toast.error(t("common.somethingWrong"));
+      } finally {
+        submittingRef.current = false;
       }
     });
   }
@@ -411,7 +419,7 @@ export function PosTerminal({
         </div>
       </section>
 
-      <Card className="flex flex-col lg:sticky lg:top-18 lg:order-1 lg:max-h-[calc(100dvh-5.5rem)] lg:overflow-y-auto">
+      <Card className="flex min-w-0 flex-col lg:sticky lg:top-18 lg:order-1 lg:max-h-[calc(100dvh-5.5rem)] lg:overflow-y-auto">
         <div className="space-y-3 border-b border-border p-4">
           <h1 className="text-xl font-semibold tracking-tight">{t("pos.title")}</h1>
           <CustomerPicker
@@ -787,7 +795,7 @@ function ProductTile({
       disabled={soldOut}
       onClick={onAdd}
       className={cn(
-        "relative flex min-h-28 flex-col rounded-xl border border-border bg-card p-3.5 text-left shadow-xs transition-colors",
+        "relative flex min-h-28 min-w-0 flex-col rounded-xl border border-border bg-card p-3.5 text-left shadow-xs transition-colors",
         "hover:border-primary hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
         "disabled:pointer-events-none disabled:opacity-50",
         inCart > 0 && "border-primary ring-1 ring-primary",
@@ -796,7 +804,10 @@ function ProductTile({
       <span className="flex w-full items-start justify-between gap-2">
         <span className="flex min-w-0 items-start gap-2">
           {product.photoId && <ProductThumb photoId={product.photoId} label="" size={36} />}
-          <span className="leading-snug font-semibold">{product.name}</span>
+          {/* A long name with no spaces wraps instead of widening the till. */}
+          <span className="line-clamp-3 min-w-0 leading-snug font-semibold [overflow-wrap:anywhere]">
+            {product.name}
+          </span>
         </span>
         {(product.requiresPrescription || product.expiresSoon) && (
           <span className="flex shrink-0 flex-wrap justify-end gap-1">

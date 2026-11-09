@@ -239,6 +239,9 @@ export const users = pgTable(
     // Wrong PINs in a row; at the limit the PIN is locked until pinLockedUntil.
     pinFailures: integer("pin_failures").notNull().default(0),
     pinLockedUntil: timestamp("pin_locked_until", { withTimezone: true }),
+    // Wrong passwords in a row; at the limit sign-in is refused until loginLockedUntil.
+    loginFailures: integer("login_failures").notNull().default(0),
+    loginLockedUntil: timestamp("login_locked_until", { withTimezone: true }),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
     createdAt: createdAt(),
   },

@@ -115,6 +115,7 @@ const billing = {
   historyTitle: "Payment history",
   historyEmpty: "No payments recorded for this pharmacy.",
   monthsCount: "{count} months",
+  monthsCountOne: "1 month",
   oneMonth: "1 month",
   oneYear: "1 year",
   // Plans

@@ -20,6 +20,12 @@ export type ImportItem = {
   costPrice: string;
   reorderLevel: string;
   requiresPrescription: boolean;
+  /**
+   * A requires_prescription cell that is neither yes nor no, as typed. The
+   * row is held until the user ticks or clears the box, so "maybe" never
+   * imports silently as "not prescription".
+   */
+  prescriptionText?: string;
   openingQuantity: string;
   openingBatchNumber: string;
   openingExpiryDate: string;
@@ -84,6 +90,7 @@ export const CSV_COLUMNS = {
 } as const satisfies Record<string, keyof ImportItem>;
 
 const YES = new Set(["yes", "y", "true", "1", "rx", "ใช่"]);
+const NO = new Set(["", "no", "n", "false", "0", "otc", "ไม่", "ไม่ใช่"]);
 
 /**
  * A spreadsheet date as YYYY-MM-DD. Excel often rewrites dates as D/M/YYYY,
@@ -121,8 +128,12 @@ export function itemsFromCsv(rows: string[][], fileKey: string) {
     fields.forEach((field, i) => {
       const cell = (cells[i] ?? "").trim();
       if (!field) return;
-      if (field === "requiresPrescription") item.requiresPrescription = YES.has(cell.toLowerCase());
-      else if (field === "openingExpiryDate") item.openingExpiryDate = normaliseDate(cell);
+      if (field === "requiresPrescription") {
+        const value = cell.toLowerCase();
+        item.requiresPrescription = !NO.has(value);
+        // Unclear: ticked to be safe, and flagged for the user to confirm.
+        if (!YES.has(value) && !NO.has(value)) item.prescriptionText = cell;
+      } else if (field === "openingExpiryDate") item.openingExpiryDate = normaliseDate(cell);
       // Keep the default reorder level when the column is blank.
       else if (field === "reorderLevel") item.reorderLevel = cell || DEFAULT_REORDER_LEVEL;
       else item[field] = cell;

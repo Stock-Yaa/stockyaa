@@ -6,6 +6,7 @@ const auth = {
   signIn: "Sign in",
   signingIn: "Signing in…",
   invalidCredentials: "Incorrect email or password.",
+  tooManyAttempts: "Too many wrong passwords. Try again in {minutes} minutes.",
   heroTitle: "Run your pharmacy with confidence",
   heroBody:
     "Stock, expiry dates, purchases and sales in one place, for every pharmacy on the platform.",

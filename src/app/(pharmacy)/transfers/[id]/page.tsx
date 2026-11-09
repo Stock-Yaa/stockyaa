@@ -13,6 +13,7 @@ import { branches, products, stockTransferItems, stockTransfers, users } from "@
 import { getT } from "@/i18n/server";
 import { canSwitchBranch } from "@/lib/active-branch";
 import { requirePharmacy } from "@/lib/auth";
+import { requireBranchFeatures } from "@/lib/branch-features";
 import { getFormat } from "@/lib/format-server";
 import { pageTitle } from "@/lib/metadata";
 import { round2 } from "@/lib/utils";
@@ -38,6 +39,7 @@ export default async function TransferDetailPage({
   const { user, pharmacy, branch } = await requirePharmacy();
   const [t, f, db, { id }] = await Promise.all([getT(), getFormat(pharmacy), getDb(), params]);
   if (!requiredId.safeParse(id).success) notFound();
+  await requireBranchFeatures(db, pharmacy);
 
   const [transfer] = await db
     .select({

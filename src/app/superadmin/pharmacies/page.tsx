@@ -11,8 +11,9 @@ import { buttonClass } from "@/components/ui/button";
 import { StatCard } from "@/components/ui/card";
 import { FilterSelect, Pagination, SearchInput } from "@/components/ui/list-controls";
 import { EmptyState, PageHeader, Toolbar } from "@/components/ui/page";
-import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/table";
+import { STICKY_END_TD, STICKY_END_TH, TBody, TD, TH, THead, TR, Table } from "@/components/ui/table";
 import { getDb } from "@/db";
+import { cn } from "@/lib/utils";
 import { pharmacies, plans, users } from "@/db/schema";
 import { getT } from "@/i18n/server";
 import { requireSuperAdmin } from "@/lib/auth";
@@ -25,7 +26,7 @@ import { now } from "@/lib/time";
 import { EndDate } from "../_components/end-date";
 import { accessCondition, stateCondition } from "../_lib/conditions";
 import { formatsByZone } from "../_lib/format";
-import type { PlanPrice } from "../payments/record-payment-form";
+import { planPrices } from "../_lib/plan-prices";
 import { PharmacyRowActions } from "./row-actions";
 
 export const generateMetadata = pageTitle("platform.pharmaciesTitle");
@@ -142,19 +143,7 @@ export default async function PharmaciesPage({
   }
 
   const zoneFormats = await formatsByZone(rows);
-  // Plans offered in the record-payment dialog: active ones, priced in their own currency.
-  const planPrices: PlanPrice[] = await Promise.all(
-    planList
-      .filter((plan) => plan.isActive)
-      .map(async (plan) => ({
-        id: plan.id,
-        label: `${plan.name} · ${t("subscription.perMonth", {
-          price: (await getFormat(null, plan.currency)).money(plan.priceMonthly),
-        })}`,
-        priceMonthly: plan.priceMonthly,
-        priceYearly: plan.priceYearly,
-      })),
-  );
+  const prices = await planPrices(planList, t);
   const stripeConfigured = stripeStatus().configured;
   // "Nothing found" rather than "no pharmacies yet" whenever some exist: a
   // search or filter matched none, or the page number is past the last page.
@@ -235,7 +224,7 @@ export default async function PharmaciesPage({
                 <TH>{t("platform.colSubscription")}</TH>
                 <TH>{t("platform.colValidUntil")}</TH>
                 <TH>{t("platform.colCreated")}</TH>
-                <TH className="text-right">{t("common.actions")}</TH>
+                <TH className={cn("text-right", STICKY_END_TH)}>{t("common.actions")}</TH>
               </tr>
             </THead>
             <TBody>
@@ -272,7 +261,7 @@ export default async function PharmaciesPage({
                       />
                     </TD>
                     <TD className="whitespace-nowrap tabular-nums">{f.date(row.createdAt)}</TD>
-                    <TD>
+                    <TD className={STICKY_END_TD}>
                       <div className="flex justify-end">
                         <PharmacyRowActions
                           pharmacy={{
@@ -281,7 +270,7 @@ export default async function PharmaciesPage({
                             planId: row.planId,
                             suspended: row.status !== "active",
                           }}
-                          plans={planPrices}
+                          plans={prices}
                           today={todayInTimezone(row.timezone)}
                           stripeConfigured={stripeConfigured}
                         />

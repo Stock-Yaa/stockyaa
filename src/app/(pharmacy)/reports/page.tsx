@@ -127,7 +127,9 @@ export default async function ReportsPage({
     allBranches ? getStockByBranch(db, pharmacy.id, today) : null,
   ]);
 
-  const net = round2(summary.revenue - expenses.total);
+  // Net profit: gross profit (sales without VAT, less the cost of what was sold)
+  // minus expenses. VAT is owed to the government, so it is not income.
+  const net = round2(summary.profit - expenses.total);
   const paymentSegments: Segment[] = METHODS.map(({ method, label, color }) => {
     const value = methods.find((row) => row.method === method)?.revenue ?? 0;
     return { key: method, label: t(label), value, display: f.money(value), color };

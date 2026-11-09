@@ -8,6 +8,7 @@ import { products } from "@/db/schema";
 import { getT } from "@/i18n/server";
 import { canSwitchBranch } from "@/lib/active-branch";
 import { requirePharmacy } from "@/lib/auth";
+import { requireBranchFeatures } from "@/lib/branch-features";
 import { branchScope, listBranches } from "@/lib/branches";
 import { todayInTimezone } from "@/lib/dates";
 import { pageTitle } from "@/lib/metadata";
@@ -20,6 +21,7 @@ export const generateMetadata = pageTitle("transfers.new");
 export default async function NewTransferPage() {
   const { user, pharmacy, branch } = await requirePharmacy();
   const [t, db] = await Promise.all([getT(), getDb()]);
+  await requireBranchFeatures(db, pharmacy);
   const today = todayInTimezone(pharmacy.timezone);
 
   const [allBranches, stock, productRows] = await Promise.all([

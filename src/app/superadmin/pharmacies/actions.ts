@@ -23,6 +23,7 @@ import type { MessageKey, Translate } from "@/i18n/messages";
 import { getT } from "@/i18n/server";
 import { fieldErrorsFrom, type ActionState } from "@/lib/action";
 import { requireSuperAdmin } from "@/lib/auth";
+import { currencyLocked } from "@/lib/currency-lock";
 import { dayInTimezone, zonedDayEnd } from "@/lib/dates";
 import { getFormat } from "@/lib/format-server";
 import { now } from "@/lib/time";
@@ -202,6 +203,16 @@ export async function updatePharmacyDetails(formData: FormData): Promise<ActionS
   const { id, ...details } = parsed.data;
 
   const db = await getDb();
+  // Old amounts would be relabelled, not converted (see currencyLocked).
+  const [current] = await db
+    .select({ currency: pharmacies.currency })
+    .from(pharmacies)
+    .where(eq(pharmacies.id, id))
+    .limit(1);
+  if (!current) return { ok: false, message: t("common.notFound") };
+  if (details.currency !== current.currency && (await currencyLocked(db, id))) {
+    return { ok: false, fieldErrors: { currency: t("platform.currencyLocked") } };
+  }
   const updated = await db
     .update(pharmacies)
     .set(details)
@@ -475,7 +486,8 @@ export async function resetUserPassword(formData: FormData): Promise<ActionState
   const db = await getDb();
   const updated = await db
     .update(users)
-    .set({ passwordHash: await hash(password, 10) })
+    // A new password also lifts a sign-in pause from wrong guesses.
+    .set({ passwordHash: await hash(password, 10), loginFailures: 0, loginLockedUntil: null })
     .where(pharmacyUser(pharmacyId, userId))
     .returning({ id: users.id });
   if (updated.length === 0) return { ok: false, message: t("common.notFound") };
@@ -498,12 +510,30 @@ export async function setUserActive(
   const [ofPharmacy, targetUser, active] = args.data;
 
   const db = await getDb();
-  const updated = await db
-    .update(users)
-    .set({ isActive: active })
-    .where(pharmacyUser(ofPharmacy, targetUser))
-    .returning({ id: users.id });
-  if (updated.length === 0) return { ok: false, message: t("common.notFound") };
+  const refusal = await db.transaction(async (tx): Promise<MessageKey | null> => {
+    const [target] = await tx
+      .select({ role: users.role })
+      .from(users)
+      .where(pharmacyUser(ofPharmacy, targetUser))
+      .for("update");
+    if (!target) return "common.notFound";
+    // As on the pharmacy side: the last active admin stays, or nobody can manage the pharmacy.
+    if (!active && target.role === "admin") {
+      const otherAdmins = await tx.$count(
+        users,
+        and(
+          eq(users.pharmacyId, ofPharmacy),
+          eq(users.role, "admin"),
+          eq(users.isActive, true),
+          ne(users.id, targetUser),
+        ),
+      );
+      if (otherAdmins === 0) return "platform.lastAdmin";
+    }
+    await tx.update(users).set({ isActive: active }).where(eq(users.id, targetUser));
+    return null;
+  });
+  if (refusal) return { ok: false, message: t(refusal) };
 
   revalidatePlatform();
   return {

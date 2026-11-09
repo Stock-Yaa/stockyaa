@@ -44,5 +44,17 @@ export function useFormAction(
     });
   }
 
-  return { onSubmit, pending, state, errors: state?.fieldErrors ?? {} };
+  /**
+   * Put on the <form> as `onChange` to drop a field's error as soon as the
+   * user edits that field, instead of keeping it until the next submit.
+   */
+  function onChange(event: React.FormEvent<HTMLFormElement>) {
+    const name = (event.target as { name?: unknown }).name;
+    if (typeof name !== "string" || !state?.fieldErrors?.[name]) return;
+    const fieldErrors = { ...state.fieldErrors };
+    delete fieldErrors[name];
+    setState({ ...state, fieldErrors });
+  }
+
+  return { onSubmit, onChange, pending, state, errors: state?.fieldErrors ?? {} };
 }

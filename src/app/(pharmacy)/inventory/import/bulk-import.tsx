@@ -63,6 +63,7 @@ const OTHER_FIELDS: Partial<Record<keyof ImportItem, MessageKey>> = {
   barcode: "products.barcode",
   category: "products.category",
   reorderLevel: "products.reorderLevel",
+  prescriptionText: "products.requiresPrescription",
 };
 
 /** Strength, form, generic name, maker and category on one line. */
@@ -96,13 +97,21 @@ export function BulkImport() {
   }
 
   function updateItem(key: string, field: keyof ImportItem, value: string | boolean) {
+    // Ticking or clearing the Rx box confirms an unclear CSV value.
+    const cleared: (keyof ImportItem)[] =
+      field === "requiresPrescription" ? [field, "prescriptionText"] : [field];
     setQueue((current) =>
-      current.map((item) => (item.key === key ? { ...item, [field]: value } : item)),
+      current.map((item) => {
+        if (item.key !== key) return item;
+        const next = { ...item, [field]: value };
+        if (field === "requiresPrescription") delete next.prescriptionText;
+        return next;
+      }),
     );
     setErrors((current) => {
-      if (!current[key]?.[field]) return current;
+      if (!cleared.some((name) => current[key]?.[name])) return current;
       const fieldErrors = { ...current[key] };
-      delete fieldErrors[field];
+      for (const name of cleared) delete fieldErrors[name];
       return { ...current, [key]: fieldErrors };
     });
   }

@@ -3,8 +3,8 @@ const platform = {
   title: "Platform overview",
   description: "Every pharmacy on the platform and the state of its subscription.",
   statPharmacies: "Total pharmacies",
-  statActive: "Active",
-  statActiveHint: "Not suspended, subscription valid",
+  statActive: "With access",
+  statActiveHint: "Paid or on trial, not suspended or expired",
   statSuspended: "Suspended",
   statSuspendedHint: "Locked by the platform",
   statExpiring: "Expiring soon",
@@ -138,6 +138,9 @@ const platform = {
   deactivateTitle: "Deactivate this user?",
   deactivateBody: "{name} is signed out immediately and cannot sign in until reactivated.",
   userDeactivated: "User deactivated",
+  lastAdmin: "This pharmacy needs at least one active admin. Add or activate another admin first.",
+  currencyLocked:
+    "The currency can't change once this pharmacy has sales, purchases or expenses: old amounts would show in the new currency without being converted.",
 
   // Pharmacy detail: delete
   dangerTitle: "Delete pharmacy",

@@ -16,6 +16,26 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 const GAP = 3;
 
 /**
+ * Whole-number shares of `total` that add up to exactly 100 (largest
+ * remainder), so the legend never reads 38% + 63%.
+ */
+function wholePercents(values: number[], total: number): number[] {
+  if (total <= 0) return values.map(() => 0);
+  const exact = values.map((value) => (value / total) * 100);
+  const result = exact.map(Math.floor);
+  const order = exact
+    .map((value, i) => ({ i, remainder: value - Math.floor(value) }))
+    .sort((a, b) => b.remainder - a.remainder);
+  let left = 100 - result.reduce((sum, value) => sum + value, 0);
+  for (const { i } of order) {
+    if (left <= 0) break;
+    result[i] += 1;
+    left -= 1;
+  }
+  return result;
+}
+
+/**
  * Part-to-whole as a donut with the total in the middle and a legend beside
  * it. The legend names every part with its value and share, so colour is
  * never the only cue; hovering a segment shows its label too.
@@ -34,6 +54,10 @@ export function DonutChart({
   const total = segments.reduce((sum, s) => sum + s.value, 0);
   const visible = segments.filter((s) => s.value > 0);
   const gap = visible.length > 1 ? GAP : 0;
+  const shares = wholePercents(
+    segments.map((s) => s.value),
+    total,
+  );
 
   const lengths = visible.map((segment) => (segment.value / total) * CIRCUMFERENCE);
   const arcs = visible.map((segment, i) => ({
@@ -95,7 +119,7 @@ export function DonutChart({
           <p className="text-sm text-muted-foreground">{emptyLabel}</p>
         ) : (
           <ul className="grid w-full min-w-0 flex-1 gap-2.5">
-            {segments.map((segment) => (
+            {segments.map((segment, i) => (
               <li key={segment.key} className="flex items-center gap-2 text-sm">
                 <span
                   className="size-2.5 shrink-0 rounded-full"
@@ -106,7 +130,7 @@ export function DonutChart({
                 </span>
                 <span className="font-medium tabular-nums">{segment.display}</span>
                 <span className="w-10 text-right text-xs text-muted-foreground tabular-nums">
-                  {Math.round((segment.value / total) * 100)}%
+                  {shares[i]}%
                 </span>
               </li>
             ))}

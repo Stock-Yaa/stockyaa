@@ -15,6 +15,7 @@ const pos = {
   maxStock: "Only {count} of {name} in stock",
   cart: "Cart",
   cartCount: "{count} items",
+  cartCountOne: "1 item",
   cartEmpty: "Scan or search to add products",
   cartEmptyHint: "Press F1 to jump to the search box.",
   clearCart: "Clear cart",

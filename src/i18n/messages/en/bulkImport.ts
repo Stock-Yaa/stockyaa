@@ -84,6 +84,7 @@ const bulkImport = {
   nothingToImport: "Add products to the queue first.",
   duplicateProduct: "Already in your products, or listed twice here",
   duplicateBarcode: "This barcode is already used, or listed twice here",
+  unclearPrescription: "Not clear: write yes or no. Tick or clear the box to confirm.",
 };
 
 export default bulkImport;

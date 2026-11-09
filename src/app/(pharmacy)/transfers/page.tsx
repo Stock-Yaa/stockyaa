@@ -12,6 +12,7 @@ import { TRANSFER_STATUSES, branches, stockTransferItems, stockTransfers } from 
 import { getT } from "@/i18n/server";
 import { canSwitchBranch } from "@/lib/active-branch";
 import { requirePharmacy } from "@/lib/auth";
+import { requireBranchFeatures } from "@/lib/branch-features";
 import { getFormat } from "@/lib/format-server";
 import { pageTitle } from "@/lib/metadata";
 import { PAGE_SIZE, likePattern, pageCountOf, parsePage } from "@/lib/pagination";
@@ -38,6 +39,7 @@ export default async function TransfersPage({
     getDb(),
     searchParams,
   ]);
+  await requireBranchFeatures(db, pharmacy);
   const page = parsePage(params.page);
   const status = TRANSFER_STATUSES.find((s) => s === params.status);
   const canWiden = canSwitchBranch(user) && available.length > 1;

@@ -85,6 +85,7 @@ const bulkImport: typeof en = {
   nothingToImport: "โปรดเพิ่มสินค้าในรายการรอนำเข้าก่อน",
   duplicateProduct: "มีสินค้านี้อยู่แล้ว หรือซ้ำกันในรายการนี้",
   duplicateBarcode: "บาร์โค้ดนี้ถูกใช้แล้ว หรือซ้ำกันในรายการนี้",
+  unclearPrescription: "ไม่ชัดเจน: ใส่ yes หรือ no แล้วติ๊กหรือเอาเครื่องหมายออกเพื่อยืนยัน",
 };
 
 export default bulkImport;

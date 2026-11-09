@@ -67,6 +67,28 @@ export async function saveProduct(formData: FormData): Promise<ActionState> {
     }
   }
 
+  // One barcode, one product: the till picks a product by its barcode. Bulk
+  // import refuses a used barcode the same way.
+  if (values.barcode) {
+    const [taken] = await db
+      .select({ name: products.name })
+      .from(products)
+      .where(
+        and(
+          eq(products.pharmacyId, pharmacy.id),
+          eq(products.barcode, values.barcode),
+          ...(id ? [ne(products.id, id)] : []),
+        ),
+      )
+      .limit(1);
+    if (taken) {
+      return {
+        ok: false,
+        fieldErrors: { barcode: t("products.barcodeTaken", { name: taken.name }) },
+      };
+    }
+  }
+
   let productId = id;
   if (id) {
     const updated = await db

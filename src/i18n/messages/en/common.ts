@@ -39,6 +39,7 @@ const common = {
   next: "Next",
   pageOf: "Page {page} of {pages}",
   showingCount: "{count} records",
+  showingCountOne: "1 record",
   confirmDeleteTitle: "Delete this record?",
   confirmDeleteBody: "This cannot be undone.",
   created: "Created successfully",

@@ -30,7 +30,7 @@ export function CreatePharmacyForm({
   trialDays: number;
 }) {
   const t = useT();
-  const { onSubmit, pending, errors } = useFormAction(createPharmacy);
+  const { onSubmit, onChange, pending, errors } = useFormAction(createPharmacy);
   const [endDate, setEndDate] = useState(presets.trial);
 
   const endDatePresets = [
@@ -41,7 +41,7 @@ export function CreatePharmacyForm({
   ];
 
   return (
-    <form onSubmit={onSubmit} className="grid gap-6">
+    <form onSubmit={onSubmit} onChange={onChange} className="grid gap-6">
       <Card>
         <CardHeader>
           <CardTitle>{t("platform.sectionPharmacy")}</CardTitle>

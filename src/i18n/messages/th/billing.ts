@@ -117,6 +117,7 @@ const billing: typeof en = {
   historyTitle: "ประวัติการชำระเงิน",
   historyEmpty: "ยังไม่มีการชำระเงินของร้านนี้",
   monthsCount: "{count} เดือน",
+  monthsCountOne: "{count} เดือน",
   oneMonth: "1 เดือน",
   oneYear: "1 ปี",
   // Plans

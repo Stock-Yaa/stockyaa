@@ -13,6 +13,7 @@ const sales = {
   statRevenueHint: "Completed sales only",
   statRefunded: "Refunded",
   statRefundedHint: "{count} sales",
+  statRefundedHintOne: "1 sale",
   invoice: "Invoice",
   dateTime: "Date and time",
   customer: "Customer",

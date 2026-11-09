@@ -15,6 +15,7 @@ const anomalies: typeof en = {
   detected: "ตรวจพบ: {time}",
   moreItems: "+อีก {count} รายการ",
   itemUnits: "{count} หน่วย",
+  itemUnitsOne: "{count} หน่วย",
   itemSold: "ขาย {count}",
   itemRefunds: "คืนเงิน {count}",
   none: "ไม่พบความผิดปกติ",

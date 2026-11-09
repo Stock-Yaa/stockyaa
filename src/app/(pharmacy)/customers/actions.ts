@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getDb } from "@/db";
-import { PRICE_LEVELS, customers } from "@/db/schema";
+import { PRICE_LEVELS, customers, sales } from "@/db/schema";
 import type { MessageKey } from "@/i18n/messages";
 import { getT } from "@/i18n/server";
 import { fieldErrorsFrom, type ActionState } from "@/lib/action";
@@ -70,7 +70,11 @@ export async function saveCustomer(formData: FormData): Promise<ActionState> {
   return { ok: true, message: t(id ? "common.updated" : "common.created") };
 }
 
-/** Deletes a customer. Their sales stay (sales.customer_id is set to null). */
+/**
+ * Deletes a customer who has no sales. A customer with sales stays, so old
+ * invoices keep the name they were sold to (customers are pharmacy-wide, so
+ * sales in any branch count).
+ */
 export async function deleteCustomer(id: string): Promise<ActionState> {
   const { pharmacy } = await requirePharmacy();
   const t = await getT();
@@ -78,9 +82,24 @@ export async function deleteCustomer(id: string): Promise<ActionState> {
     return { ok: false, message: t("common.notFound") };
   }
   const db = await getDb();
-  await db
-    .delete(customers)
-    .where(and(eq(customers.id, id), eq(customers.pharmacyId, pharmacy.id)));
+  const refusal = await db.transaction(async (tx): Promise<MessageKey | null> => {
+    // Locking the row holds back a sale for this customer while we check.
+    const [customer] = await tx
+      .select({ id: customers.id })
+      .from(customers)
+      .where(and(eq(customers.id, id), eq(customers.pharmacyId, pharmacy.id)))
+      .for("update");
+    if (!customer) return "common.notFound";
+    const [sale] = await tx
+      .select({ id: sales.id })
+      .from(sales)
+      .where(and(eq(sales.customerId, id), eq(sales.pharmacyId, pharmacy.id)))
+      .limit(1);
+    if (sale) return "customers.hasSales";
+    await tx.delete(customers).where(eq(customers.id, id));
+    return null;
+  });
+  if (refusal) return { ok: false, message: t(refusal) };
   revalidatePath("/customers");
   return { ok: true, message: t("common.deleted") };
 }

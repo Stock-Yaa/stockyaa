@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, isNull, ne, or } from "drizzle-orm";
+import { and, eq, isNull, ne, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getDb } from "@/db";
@@ -14,6 +14,9 @@ import { branchLimit, limitReachedKey } from "@/lib/branches";
 import { isUniqueViolation } from "@/lib/db-error";
 import { buyerBranchField } from "@/lib/tax-invoice";
 import { formToObject, optionalId, optionalText, requiredId, requiredText } from "@/lib/validation";
+
+/** A branch name compared loosely: trimmed, single spaces, lower case. */
+const looseName = (name: string) => name.trim().replace(/\s+/g, " ").toLowerCase();
 
 /** Why a branch change was refused, or null when it went through. */
 type Refusal = { key: MessageKey; vars?: TranslateVars } | null;
@@ -53,6 +56,16 @@ export async function saveBranch(formData: FormData): Promise<ActionState> {
     return { ok: false, fieldErrors: { code: t("branches.codeRequired") } };
   }
   const db = await getDb();
+  // Names that differ only in capitals or spacing look the same in every list.
+  const sameName = await db.$count(
+    branches,
+    and(
+      eq(branches.pharmacyId, pharmacy.id),
+      sql`lower(regexp_replace(trim(${branches.name}), '\\s+', ' ', 'g')) = ${looseName(values.name)}`,
+      id ? ne(branches.id, id) : undefined,
+    ),
+  );
+  if (sameName > 0) return { ok: false, fieldErrors: { name: t("branches.nameTaken") } };
   if (values.code) {
     const taken = await db.$count(
       branches,

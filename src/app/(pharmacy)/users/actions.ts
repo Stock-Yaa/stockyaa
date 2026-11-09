@@ -218,7 +218,8 @@ export async function resetPassword(formData: FormData): Promise<ActionState> {
   const db = await getDb();
   const updated = await db
     .update(users)
-    .set({ passwordHash: await hash(password, 10) })
+    // A new password also lifts a sign-in pause from wrong guesses.
+    .set({ passwordHash: await hash(password, 10), loginFailures: 0, loginLockedUntil: null })
     .where(pharmacyUser(pharmacy.id, userId))
     .returning({ id: users.id });
   if (updated.length === 0) return { ok: false, message: t("common.notFound") };

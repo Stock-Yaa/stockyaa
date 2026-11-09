@@ -4,8 +4,9 @@ import { currencyOptions } from "@/lib/options";
 import { Badge } from "@/components/ui/card";
 import { ConfirmButton } from "@/components/ui/confirm-button";
 import { EmptyState, PageHeader } from "@/components/ui/page";
-import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/table";
+import { STICKY_END_TD, STICKY_END_TH, TBody, TD, TH, THead, TR, Table } from "@/components/ui/table";
 import { getDb } from "@/db";
+import { cn } from "@/lib/utils";
 import { pharmacies, plans } from "@/db/schema";
 import { getLocale, getT } from "@/i18n/server";
 import { requireSuperAdmin } from "@/lib/auth";
@@ -64,7 +65,7 @@ export default async function PlansPage() {
               <TH className="text-right">{t("platform.colPharmacies")}</TH>
               <TH>{t("common.status")}</TH>
               <TH className="text-right">{t("platform.sortOrder")}</TH>
-              <TH className="text-right">{t("common.actions")}</TH>
+              <TH className={cn("text-right", STICKY_END_TH)}>{t("common.actions")}</TH>
             </tr>
           </THead>
           <TBody>
@@ -97,7 +98,7 @@ export default async function PlansPage() {
                   </Badge>
                 </TD>
                 <TD className="text-right tabular-nums">{plan.sortOrder}</TD>
-                <TD>
+                <TD className={STICKY_END_TD}>
                   <div className="flex justify-end gap-1">
                     <PlanFormButton
                       plan={plan}

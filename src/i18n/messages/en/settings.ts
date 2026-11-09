@@ -10,6 +10,8 @@ const settings = {
   licenseNumber: "Licence number",
   taxId: "Tax ID",
   currency: "Currency",
+  currencyLocked:
+    "The currency can't change once there are sales, purchases or expenses: old amounts would show in the new currency without being converted.",
   timezone: "Time zone",
   taxRate: "VAT rate (%)",
   taxRateHint: "The VAT included in your prices, usually 7. Used only when VAT registered.",

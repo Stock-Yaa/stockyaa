@@ -1,5 +1,14 @@
 import { cn } from "@/lib/utils";
 
+/*
+ * Keeps an Actions column in view while a wide table scrolls sideways. The
+ * cell needs an opaque background; the header one matches the header row
+ * (muted at 50% over the card).
+ */
+export const STICKY_END_TH =
+  "sticky right-0 bg-[color-mix(in_oklab,var(--muted)_50%,var(--card))] shadow-[inset_1px_0_0_var(--border)]";
+export const STICKY_END_TD = "sticky right-0 bg-card shadow-[inset_1px_0_0_var(--border)]";
+
 /** Scrollable table inside a card-like frame. */
 export function Table({ className, ...props }: React.ComponentProps<"table">) {
   return (

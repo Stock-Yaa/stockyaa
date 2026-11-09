@@ -81,7 +81,12 @@ export async function lookupDrugs(text: string): Promise<LookupResult> {
   }
 }
 
-const rowSchema = z.object({ ...productFields, category: optionalText(100) });
+const rowSchema = z.object({
+  ...productFields,
+  category: optionalText(100),
+  // Set only for an unclear requires_prescription cell, until the user confirms the box.
+  prescriptionText: z.never({ error: "bulkImport.unclearPrescription" }).optional(),
+});
 
 export type ImportResult = {
   ok: boolean;

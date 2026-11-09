@@ -17,6 +17,7 @@ const dashboard = {
   noYesterdayComparison: "No sales yesterday by this time",
   transactions: "Transactions",
   unitsSold: "{count} units sold",
+  unitsSoldOne: "1 unit sold",
   grossProfit: "Gross profit",
   margin: "{percent}% margin",
   averageSale: "Average sale",
@@ -26,17 +27,20 @@ const dashboard = {
   attentionTitle: "Stock needs attention",
   attentionExpired: "{count} expired batches still on the shelves ({value} at cost)",
   attentionOut: "{count} products out of stock",
+  attentionOutOne: "1 product out of stock",
   attentionAction: "Review stock",
 
   // Business snapshot
   snapshotTitle: "Business snapshot",
   yesterday: "Yesterday",
   yesterdayHint: "{count} sales, full day",
+  yesterdayHintOne: "1 sale, full day",
   taxMonth: "Tax this month",
   taxMonthHint: "Collected on sales",
   profitMonth: "Gross profit this month",
   refundsMonth: "Refunds this month",
   refundsMonthHint: "{count} refunded sales",
+  refundsMonthHintOne: "1 refunded sale",
   customers: "Customers",
   customersHint: "On file",
   newCustomers: "New customers",
@@ -45,6 +49,7 @@ const dashboard = {
   openPurchasesHint: "{amount} awaiting delivery",
   activeProducts: "Active products",
   activeProductsHint: "{count} units in stock",
+  activeProductsHintOne: "1 unit in stock",
 
   // Revenue and value
   revenueTitle: "Revenue and value",
@@ -53,8 +58,10 @@ const dashboard = {
   thisMonth: "This month",
   vsLastMonth: "vs same days last month",
   monthHint: "{count} sales",
+  monthHintOne: "1 sale",
   last7Days: "Last 7 days",
   last7DaysHint: "{count} sales",
+  last7DaysHintOne: "1 sale",
   stockRetailValue: "Stock value at retail",
   stockRetailValueHint: "{amount} at cost",
 

@@ -8,7 +8,8 @@ const suppliers = {
   taxId: "Tax ID",
   empty: "No suppliers yet",
   emptyHint: "Add the companies you order medicine from.",
-  deleteBody: "Purchases from this supplier are kept, but will no longer show its name.",
+  deleteBody: "Only a supplier with no purchases can be deleted.",
+  hasPurchases: "This supplier has purchases, so it can't be deleted: its name stays on those purchases.",
 };
 
 export default suppliers;

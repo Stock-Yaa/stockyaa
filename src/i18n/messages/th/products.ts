@@ -37,6 +37,7 @@ const products: typeof en = {
   strength: "ขนาดยา",
   strengthPlaceholder: "500 มก.",
   barcode: "บาร์โค้ด",
+  barcodeTaken: "บาร์โค้ดนี้ใช้กับ {name} แล้ว",
   unit: "หน่วยขาย",
   unitHint: "เช่น แผง ขวด หรือกล่อง",
   salePriceWithCurrency: "ราคาปกติ ({currency})",

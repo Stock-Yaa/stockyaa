@@ -135,6 +135,15 @@ export async function scanNotifications(db: DbOrTx, pharmacy: Pharmacy): Promise
           // Stock alerts from before branches existed: the scan above has just
           // recreated whatever still applies, now tied to its branch.
           and(isNull(notifications.branchId), inArray(notifications.type, STOCK_TYPES)),
+          // Stock alerts that no longer apply (restocked, written off, archived,
+          // or from an earlier period), so the list only shows real problems.
+          and(
+            inArray(notifications.type, STOCK_TYPES),
+            notInArray(
+              notifications.key,
+              rows.filter((row) => STOCK_TYPES.includes(row.type)).map((row) => row.key),
+            ),
+          ),
         ),
       ),
     );

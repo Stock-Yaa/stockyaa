@@ -1,7 +1,8 @@
-import { and, eq } from "drizzle-orm";
-import { ArrowLeft, Pill, Receipt, Store, Users, Wallet } from "lucide-react";
+import { and, asc, eq } from "drizzle-orm";
+import { ArrowLeft, Pencil, Pill, Receipt, Store, Users, Wallet } from "lucide-react";
 import Link from "next/link";
 import { SubscriptionBadge } from "@/components/subscription-badge";
+import { buttonClass } from "@/components/ui/button";
 import { Badge, Card, CardContent, CardHeader, CardTitle, StatCard } from "@/components/ui/card";
 import { EmptyState, PageHeader } from "@/components/ui/page";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/table";
@@ -9,13 +10,17 @@ import { getDb } from "@/db";
 import { billingPayments, branches, plans, products, sales } from "@/db/schema";
 import { getT } from "@/i18n/server";
 import { requireSuperAdmin } from "@/lib/auth";
+import { todayInTimezone } from "@/lib/dates";
 import { getFormat } from "@/lib/format-server";
 import { pageTitle } from "@/lib/metadata";
+import { stripeStatus } from "@/lib/platform";
 import { STATE_LABEL, subscriptionState } from "@/lib/subscription";
 import { now } from "@/lib/time";
 import { EndDate } from "../../_components/end-date";
+import { planPrices } from "../../_lib/plan-prices";
 import { PaymentsTable } from "../../payments/payments-table";
 import { moneyFormatsFor, paymentRows } from "../../payments/queries";
+import { PharmacyRowActions } from "../row-actions";
 import { loadPharmacy, loadPharmacyUsers } from "./load";
 
 export const generateMetadata = pageTitle("platform.pharmaciesTitle");
@@ -32,7 +37,7 @@ function Detail({ label, children }: { label: string; children: React.ReactNode 
 
 const dash = <span className="text-muted-foreground">—</span>;
 
-/** Read-only overview of a pharmacy. Changes are made on the edit page or from the list menu. */
+/** Overview of a pharmacy, with the same actions as its row in the list. */
 export default async function PharmacyDetailPage({
   params,
 }: {
@@ -43,7 +48,7 @@ export default async function PharmacyDetailPage({
   const pharmacy = await loadPharmacy(id);
   const db = await getDb();
 
-  const [t, f, [plan], userRows, productCount, saleCount, branchCount, payments] = await Promise.all([
+  const [t, f, [plan], userRows, productCount, saleCount, branchCount, payments, planList] = await Promise.all([
     getT(),
     getFormat(pharmacy),
     pharmacy.planId
@@ -54,7 +59,19 @@ export default async function PharmacyDetailPage({
     db.$count(sales, eq(sales.pharmacyId, pharmacy.id)),
     db.$count(branches, and(eq(branches.pharmacyId, pharmacy.id), eq(branches.isActive, true))),
     paymentRows(db, eq(billingPayments.pharmacyId, pharmacy.id)).limit(20),
+    db
+      .select({
+        id: plans.id,
+        name: plans.name,
+        isActive: plans.isActive,
+        priceMonthly: plans.priceMonthly,
+        priceYearly: plans.priceYearly,
+        currency: plans.currency,
+      })
+      .from(plans)
+      .orderBy(asc(plans.sortOrder), asc(plans.name)),
   ]);
+  const prices = await planPrices(planList, t);
 
   const planFormat = plan ? await getFormat(null, plan.currency) : f;
   const paymentFormats = await moneyFormatsFor(payments, f);
@@ -77,6 +94,25 @@ export default async function PharmacyDetailPage({
         description={`${t("platform.colCreated")}: ${f.date(pharmacy.createdAt)}`}
       >
         <SubscriptionBadge state={state} />
+        <Link
+          href={`/superadmin/pharmacies/${pharmacy.id}/edit`}
+          className={buttonClass({ variant: "outline" })}
+        >
+          <Pencil />
+          {t("platform.editDetails")}
+        </Link>
+        {/* Record payment, suspend / reactivate and delete, as in the list. */}
+        <PharmacyRowActions
+          pharmacy={{
+            id: pharmacy.id,
+            name: pharmacy.name,
+            planId: pharmacy.planId,
+            suspended: pharmacy.status !== "active",
+          }}
+          plans={prices}
+          today={todayInTimezone(pharmacy.timezone)}
+          stripeConfigured={stripeStatus().configured}
+        />
       </PageHeader>
 
       <div className="grid gap-4 *:min-w-0 sm:grid-cols-2 xl:grid-cols-4">

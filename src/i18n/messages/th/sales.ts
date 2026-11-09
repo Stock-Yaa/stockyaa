@@ -15,6 +15,7 @@ const sales: typeof en = {
   statRevenueHint: "เฉพาะรายการที่สำเร็จ",
   statRefunded: "ยอดคืนเงิน",
   statRefundedHint: "{count} รายการ",
+  statRefundedHintOne: "{count} รายการ",
   invoice: "เลขที่ใบเสร็จ",
   dateTime: "วันที่และเวลา",
   customer: "ลูกค้า",

@@ -13,6 +13,7 @@ const anomalies = {
   detected: "Detected: {time}",
   moreItems: "+{count} more",
   itemUnits: "{count} units",
+  itemUnitsOne: "1 unit",
   itemSold: "{count} sold",
   itemRefunds: "{count} refunded",
   none: "No anomalies found",

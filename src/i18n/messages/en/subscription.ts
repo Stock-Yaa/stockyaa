@@ -17,6 +17,7 @@ const subscription = {
   validUntil: "Valid until",
   noEndDate: "No end date",
   daysLeft: "{days} days left",
+  daysLeftOne: "1 day left",
   lastDay: "Less than a day left",
   endedOn: "Ended on {date}",
   accessBlockedTitle: "Access is paused",

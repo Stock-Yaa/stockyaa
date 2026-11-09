@@ -9,6 +9,7 @@ import type { MessageKey } from "@/i18n/messages";
 import { getT } from "@/i18n/server";
 import { fieldErrorsFrom, type ActionState } from "@/lib/action";
 import { requirePharmacy } from "@/lib/auth";
+import { currencyLocked } from "@/lib/currency-lock";
 import { todayInTimezone } from "@/lib/dates";
 import {
   INVOICE_PREFIX_PATTERN,
@@ -211,6 +212,9 @@ export async function updatePharmacyProfile(formData: FormData): Promise<ActionS
   }
 
   const db = await getDb();
+  if (parsed.data.currency !== pharmacy.currency && (await currencyLocked(db, pharmacy.id))) {
+    return { ok: false, fieldErrors: { currency: t("settings.currencyLocked") } };
+  }
   await db
     .update(pharmacies)
     .set({

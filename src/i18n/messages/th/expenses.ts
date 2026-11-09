@@ -40,6 +40,7 @@ const expenses: typeof en = {
   categoryName: "ชื่อหมวดหมู่",
   newCategoryPlaceholder: "หมวดหมู่ใหม่ เช่น ค่าน้ำค่าไฟ",
   categoryExpenseCount: "{count} รายการ",
+  categoryExpenseCountOne: "{count} รายการ",
   editCategory: "แก้ไขหมวดหมู่",
   deleteCategoryTitle: "ลบหมวดหมู่นี้?",
   categoryInUse: "หมวดหมู่นี้ยังมีค่าใช้จ่ายอยู่ ย้ายหรือลบค่าใช้จ่ายเหล่านั้นก่อน",

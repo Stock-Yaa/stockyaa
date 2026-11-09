@@ -35,6 +35,7 @@ const products = {
   strength: "Strength",
   strengthPlaceholder: "500 mg",
   barcode: "Barcode",
+  barcodeTaken: "This barcode is already used by {name}",
   unit: "Selling unit",
   unitHint: "For example strip, bottle or box.",
   salePriceWithCurrency: "Regular price ({currency})",

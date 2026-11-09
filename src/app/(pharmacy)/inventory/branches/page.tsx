@@ -11,6 +11,7 @@ import { batches, products } from "@/db/schema";
 import { getT } from "@/i18n/server";
 import { canSwitchBranch } from "@/lib/active-branch";
 import { requirePharmacy } from "@/lib/auth";
+import { requireBranchFeatures } from "@/lib/branch-features";
 import { todayInTimezone } from "@/lib/dates";
 import { getFormat } from "@/lib/format-server";
 import { pageTitle } from "@/lib/metadata";
@@ -38,6 +39,7 @@ export default async function StockByBranchPage({
     getDb(),
     searchParams,
   ]);
+  await requireBranchFeatures(db, pharmacy);
   const page = parsePage(params.page);
   const today = todayInTimezone(pharmacy.timezone);
 

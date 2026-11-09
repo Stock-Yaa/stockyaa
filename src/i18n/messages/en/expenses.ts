@@ -38,6 +38,7 @@ const expenses = {
   categoryName: "Category name",
   newCategoryPlaceholder: "New category, e.g. Utilities",
   categoryExpenseCount: "{count} expenses",
+  categoryExpenseCountOne: "1 expense",
   editCategory: "Edit category",
   deleteCategoryTitle: "Delete this category?",
   categoryInUse: "This category still has expenses. Move or delete them first.",

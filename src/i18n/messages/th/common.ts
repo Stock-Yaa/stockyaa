@@ -41,6 +41,7 @@ const common: typeof en = {
   next: "ถัดไป",
   pageOf: "หน้า {page} จาก {pages}",
   showingCount: "{count} รายการ",
+  showingCountOne: "{count} รายการ",
   confirmDeleteTitle: "ลบรายการนี้หรือไม่?",
   confirmDeleteBody: "การดำเนินการนี้ไม่สามารถย้อนกลับได้",
   created: "สร้างเรียบร้อยแล้ว",
