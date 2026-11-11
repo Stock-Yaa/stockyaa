@@ -486,8 +486,8 @@ const countSchema = z.object({
 });
 
 /**
- * Records a blind count of the drawer and only then reveals what was
- * expected. From the first count on the session takes no more cash; it can
+ * Records a count of the drawer and compares it with what was expected.
+ * From the first count on the session takes no more cash; it can
  * be recounted while the rules allow, then it is closed with finishClose.
  */
 export async function submitCount(formData: FormData): Promise<CountResult> {

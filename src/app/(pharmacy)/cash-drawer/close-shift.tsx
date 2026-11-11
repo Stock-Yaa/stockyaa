@@ -1,6 +1,6 @@
 "use client";
 
-import { Lock, RotateCcw, ShieldAlert } from "lucide-react";
+import { Lock, RotateCcw, ShieldAlert, Wallet } from "lucide-react";
 import Link from "next/link";
 import { unstable_rethrow, useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -28,8 +28,8 @@ const LEVEL: Record<VarianceLevel, { box: string; message: MessageKey }> = {
 };
 
 /**
- * Closing a session. Step 1 is a blind count with the counter's PIN; the
- * expected amount is shown only after it is submitted. Step 2 shows the
+ * Closing a session. Step 1 is the count, with the counter's PIN, next to
+ * what the drawer should hold. Step 2 shows the
  * result, offers a recount when the rules allow, asks for a reason when it is
  * out, and what to take to the safe; then the session closes.
  */
@@ -37,15 +37,19 @@ export function CloseShiftPanel({
   shiftId,
   staff,
   ownerId,
+  expected,
   initial,
 }: {
   shiftId: string;
   staff: StaffOption[];
   ownerId: string | null;
+  /** What the drawer should hold. */
+  expected: number;
   /** The last count, when counting started earlier (page reloaded). */
   initial: CountOutcome | null;
 }) {
   const t = useT();
+  const f = useFormat();
   const { branch } = usePharmacy();
   const [result, setResult] = useState<CountOutcome | null>(initial);
   const [recounting, setRecounting] = useState(false);
@@ -83,9 +87,9 @@ export function CloseShiftPanel({
             {recounting ? t("cashDrawer.recountTitle") : t("cashDrawer.closeTitle")}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">{t("cashDrawer.closeHint")}</p>
-          <p className="mt-3 mb-4 flex gap-2 rounded-lg bg-warning/15 px-3 py-2 text-sm text-warning">
-            <Lock className="mt-0.5 size-4 shrink-0" />
-            {t("cashDrawer.blindCount")}
+          <p className="mt-3 mb-4 flex gap-2 rounded-lg bg-info/15 px-3 py-2 text-sm text-info">
+            <Wallet className="mt-0.5 size-4 shrink-0" />
+            {t("cashDrawer.expectedNow", { amount: f.money(expected) })}
           </p>
           <CashCounter totalLabel={t("cashDrawer.counted")} error={errors.counts} />
         </Card>

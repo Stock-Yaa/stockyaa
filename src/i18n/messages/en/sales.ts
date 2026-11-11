@@ -24,6 +24,7 @@ const sales = {
   card: "Card",
   transfer: "Transfer",
   empty: "No sales yet",
+  emptyToday: "No sales today yet",
   emptyHint: "Sales appear here as soon as you complete one at the point of sale.",
   receipt: "Receipt",
   backToSales: "Back to sales",

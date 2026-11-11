@@ -25,6 +25,7 @@ import {
   getShiftActivity,
   getShiftTotals,
   payoutCategories,
+  type ShiftTotals,
 } from "@/lib/cash-drawer";
 import { canRecount, cashRulesOf, varianceLevel } from "@/lib/cash-rules";
 import { getFormat } from "@/lib/format-server";
@@ -221,17 +222,32 @@ async function DrawerTab({ ctx, close, handover }: { ctx: Ctx; close: boolean; h
 
   const shift = state.shift;
   if (close || shift.countAttempts.length > 0) {
+    const totals = await getShiftTotals(db, shift);
     return (
       <CloseShiftPanel
         shiftId={shift.id}
         staff={staff}
         ownerId={shift.openedBy}
-        initial={await lastCount(ctx, shift)}
+        expected={totals.expectedCash}
+        initial={lastCount(ctx, shift, totals)}
       />
     );
   }
 
-  const activity = await getShiftActivity(db, shift, ACTIVITY_LIMIT);
+  const [activity, totals] = await Promise.all([
+    getShiftActivity(db, shift, ACTIVITY_LIMIT),
+    getShiftTotals(db, shift),
+  ]);
+  const balance: [MessageKey, number][] = [
+    ["cashDrawer.openingFloat", shift.openingBalance],
+    ["cashDrawer.cashSales", totals.cashSales],
+    ["cashDrawer.cashRefunds", -totals.cashRefunds],
+    ["cashDrawer.payIns", totals.payIns],
+    ["cashDrawer.payOuts", -(totals.payOuts + totals.expenses)],
+    ["cashDrawer.drops", -totals.drops],
+  ];
+  // `|| 0` turns -0 into 0, which formats without a minus sign.
+  const signed = (value: number) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${f.money(Math.abs(value) || 0)}`;
   const managers = staff.filter((s) => s.role !== "staff");
   const categories = await payoutCategories(db, pharmacy.id, [
         t("cashDrawer.payOut_supplies"),
@@ -276,17 +292,31 @@ async function DrawerTab({ ctx, close, handover }: { ctx: Ctx; close: boolean; h
           </Link>
         </div>
       </Card>
-      <p className="mt-2 text-xs text-muted-foreground">
-        {t("cashDrawer.expectedHidden")}
-        {isAdmin && (
-          <>
-            {" "}
-            <Link href={`/cash-drawer/${shift.id}`} className="font-medium text-primary hover:underline">
-              {t("cashDrawer.managerView")}
-            </Link>
-          </>
-        )}
-      </p>
+      {isAdmin && (
+        <p className="mt-2 text-xs">
+          <Link href={`/cash-drawer/${shift.id}`} className="font-medium text-primary hover:underline">
+            {t("cashDrawer.managerView")}
+          </Link>
+        </p>
+      )}
+
+      <Card className="mt-4 grid gap-4 p-5 sm:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] sm:items-center">
+        <div>
+          <p className="text-sm text-muted-foreground">{t("cashDrawer.cashInDrawer")}</p>
+          <p className="mt-1 text-3xl font-bold tabular-nums">{f.money(totals.expectedCash)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{t("cashDrawer.cashInDrawerHint")}</p>
+        </div>
+        <dl className="divide-y divide-border text-sm">
+          {balance.map(([label, value]) => (
+            <div key={label} className="flex justify-between gap-3 py-1.5">
+              <dt className="text-muted-foreground">{t(label)}</dt>
+              <dd className="tabular-nums">
+                {label === "cashDrawer.openingFloat" ? f.money(value) : signed(value)}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </Card>
 
       <Card className="mt-4">
         <h2 className="border-b border-border px-6 py-4 text-lg font-semibold">{t("cashDrawer.activity")}</h2>
@@ -297,11 +327,10 @@ async function DrawerTab({ ctx, close, handover }: { ctx: Ctx; close: boolean; h
 }
 
 /** The result of the session's last count, to resume closing after a reload. */
-async function lastCount(ctx: Ctx, shift: CashShift): Promise<CountOutcome | null> {
+function lastCount(ctx: Ctx, shift: CashShift, totals: ShiftTotals): CountOutcome | null {
   const last = shift.countAttempts.at(-1);
   if (!last) return null;
   const rules = cashRulesOf(ctx.pharmacy);
-  const totals = await getShiftTotals(ctx.db, shift);
   const difference = round2(last.total - totals.expectedCash);
   return {
     ok: true,

@@ -55,7 +55,8 @@ const cashDrawer = {
   // Open session
   sessionOpen: "Session open",
   since: "since {time} · {hours}h {minutes}m",
-  expectedHidden: "The amount expected in the drawer is shown only after the closing count.",
+  cashInDrawer: "Cash in drawer",
+  cashInDrawerHint: "What the drawer should hold now: the opening float plus every cash movement in this session.",
   managerView: "Manager view",
   activity: "Activity",
   activityEmpty: "No cash activity yet. Cash sales, refunds, pay-ins, pay-outs and drops appear here.",
@@ -124,7 +125,7 @@ const cashDrawer = {
   closeTitle: "Close shift: count the drawer",
   recountTitle: "Recount the drawer",
   closeHint: "Count everything in the drawer, including the float.",
-  blindCount: "Blind count: the expected amount is shown only after you submit.",
+  expectedNow: "The drawer should hold {amount}. Count what is actually there.",
   counted: "Counted",
   countedBy: "Counted by",
   ownerOrManager: "The person who opened this shift, or a manager, must count it.",

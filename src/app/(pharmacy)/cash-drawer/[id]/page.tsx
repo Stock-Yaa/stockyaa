@@ -54,7 +54,7 @@ function Lines({ rows, bold }: { rows: [string, string][]; bold?: boolean }) {
 /**
  * One cash drawer session: its Z-slip (printable on the receipt printer),
  * how the drawer was counted, reviews and every cash movement. Open sessions
- * are for managers only, so the expected amount stays hidden from cashiers.
+ * are for managers only; cashiers see the live balance on the drawer tab.
  */
 export default async function CashSessionPage({
   params,

@@ -13,7 +13,7 @@ import { requirePharmacy } from "@/lib/auth";
 import { branchScope, inScope } from "@/lib/branches";
 import { getFormat } from "@/lib/format-server";
 import { PAGE_SIZE, likePattern, pageCountOf, parsePage } from "@/lib/pagination";
-import { addDays, parseDay, zonedDayStart } from "@/lib/dates";
+import { addDays, parseDay, todayInTimezone, zonedDayStart } from "@/lib/dates";
 import { pageTitle } from "@/lib/metadata";
 import { cn } from "@/lib/utils";
 import { DateFilter } from "@/components/ui/date-filter";
@@ -35,9 +35,13 @@ export default async function SalesPage({
   const params = await searchParams;
   const q = first(params.q)?.trim();
   const status = SALE_STATUSES.find((s) => s === first(params.status));
-  // Calendar days as the pharmacy sees them, both inclusive.
-  const from = parseDay(first(params.from));
-  const to = parseDay(first(params.to));
+  // Calendar days as the pharmacy sees them, both inclusive. With no dates
+  // and no search the list opens on today; a search looks through every day.
+  const today = todayInTimezone(pharmacy.timezone);
+  const datesGiven = Boolean(parseDay(first(params.from)) || parseDay(first(params.to)));
+  const fallback = datesGiven || q ? null : today;
+  const from = parseDay(first(params.from)) ?? fallback;
+  const to = parseDay(first(params.to)) ?? fallback;
   const page = parsePage(first(params.page));
   const db = await getDb();
 
@@ -93,7 +97,8 @@ export default async function SalesPage({
       .limit(PAGE_SIZE)
       .offset((page - 1) * PAGE_SIZE),
   ]);
-  const filtered = Boolean(q || status || from || to);
+  const filtered = Boolean(q || status || datesGiven);
+  const emptyTitle = filtered ? t("common.noResults") : fallback ? t("sales.emptyToday") : t("sales.empty");
 
   return (
     <>
@@ -132,14 +137,27 @@ export default async function SalesPage({
             ...SALE_STATUSES.map((s) => ({ value: s, label: t(SALE_STATUS_LABEL[s]) })),
           ]}
         />
-        <DateFilter param="from" label={t("sales.dateFrom")} max={to ?? undefined} />
-        <DateFilter param="to" label={t("sales.dateTo")} min={from ?? undefined} />
+        {/* Keyed on the default so the inputs show it again when it comes or goes. */}
+        <DateFilter
+          key={`from-${fallback}`}
+          param="from"
+          label={t("sales.dateFrom")}
+          fallback={fallback ?? undefined}
+          max={to ?? undefined}
+        />
+        <DateFilter
+          key={`to-${fallback}`}
+          param="to"
+          label={t("sales.dateTo")}
+          fallback={fallback ?? undefined}
+          min={from ?? undefined}
+        />
       </Toolbar>
 
       {rows.length === 0 ? (
         <EmptyState
           icon={Receipt}
-          title={filtered ? t("common.noResults") : t("sales.empty")}
+          title={emptyTitle}
           hint={filtered ? undefined : t("sales.emptyHint")}
         />
       ) : (
