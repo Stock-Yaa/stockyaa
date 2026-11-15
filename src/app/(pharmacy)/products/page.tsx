@@ -1,4 +1,4 @@
-import { and, asc, count, eq, ilike, isNull, or } from "drizzle-orm";
+import { and, asc, count, eq, ilike, isNotNull, isNull, or } from "drizzle-orm";
 import { Archive, ArchiveRestore, Pill, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/card";
 import { ConfirmButton } from "@/components/ui/confirm-button";
@@ -16,6 +16,7 @@ import { todayInTimezone } from "@/lib/dates";
 import { pageTitle } from "@/lib/metadata";
 import { priceFor } from "@/lib/pricing";
 import { photosOf } from "@/lib/product-images";
+import { tmtProductsByTpu } from "@/lib/drug-database";
 import { getSellableStock } from "@/lib/stock";
 import { deleteProduct, setProductActive } from "./actions";
 import { CategoryManagerButton } from "./category-manager";
@@ -30,12 +31,12 @@ const UNCATEGORISED = "none";
 export default async function ProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; category?: string; status?: string; page?: string }>;
+  searchParams: Promise<{ q?: string; category?: string; status?: string; tmt?: string; page?: string }>;
 }) {
   const { pharmacy, branch } = await requirePharmacy();
   const t = await getT();
   const f = await getFormat(pharmacy);
-  const { q, category, status, page: pageParam } = await searchParams;
+  const { q, category, status, tmt, page: pageParam } = await searchParams;
   const page = parsePage(pageParam);
   const db = await getDb();
 
@@ -71,6 +72,7 @@ export default async function ProductsPage({
       : selectedCategory
         ? eq(products.categoryId, selectedCategory.id)
         : undefined,
+    tmt === "linked" ? isNotNull(products.tpuId) : tmt === "unlinked" ? isNull(products.tpuId) : undefined,
     pattern
       ? or(
           ilike(products.name, pattern),
@@ -91,8 +93,11 @@ export default async function ProductsPage({
       .limit(PAGE_SIZE)
       .offset((page - 1) * PAGE_SIZE),
   ]);
-  const filtered = Boolean(q || category || status);
-  const photos = await photosOf(db, pharmacy.id, rows.map((r) => r.product.id));
+  const filtered = Boolean(q || category || status || tmt);
+  const [photos, tmtByTpu] = await Promise.all([
+    photosOf(db, pharmacy.id, rows.map((r) => r.product.id)),
+    tmtProductsByTpu(db, rows.flatMap((r) => (r.product.tpuId ? [r.product.tpuId] : []))),
+  ]);
 
   return (
     <>
@@ -119,6 +124,15 @@ export default async function ProductsPage({
             { value: "", label: t("products.statusActive") },
             { value: "archived", label: t("products.statusArchived") },
             { value: "all", label: t("products.statusAll") },
+          ]}
+        />
+        <FilterSelect
+          param="tmt"
+          aria-label={t("products.filterTmt")}
+          options={[
+            { value: "", label: t("products.tmtAll") },
+            { value: "linked", label: t("products.tmtLinked") },
+            { value: "unlinked", label: t("products.tmtUnlinked") },
           ]}
         />
       </Toolbar>
@@ -159,6 +173,11 @@ export default async function ProductsPage({
                             {product.requiresPrescription && (
                               <Badge tone="info" title={t("products.rxHint")}>
                                 {t("products.rx")}
+                              </Badge>
+                            )}
+                            {product.tpuId !== null && (
+                              <Badge tone="muted" title={t("products.tmtBadgeHint", { tpu: product.tpuId })}>
+                                {t("products.tmtBadge")}
                               </Badge>
                             )}
                           </div>
@@ -211,6 +230,7 @@ export default async function ProductsPage({
                           product={product}
                           categories={categoryOptions}
                           photos={photos.get(product.id) ?? []}
+                          tmt={product.tpuId ? (tmtByTpu.get(product.tpuId) ?? null) : null}
                         />
                         {product.isActive ? (
                           <ConfirmButton

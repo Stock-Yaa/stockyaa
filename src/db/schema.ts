@@ -335,6 +335,10 @@ export const products = pgTable(
     costPrice: money("cost_price").notNull().default(0),
     reorderLevel: integer("reorder_level").notNull().default(10),
     requiresPrescription: boolean("requires_prescription").notNull().default(false),
+    // The TMT trade product (TPU code) this is, for the dispensing label: the
+    // drug database (drug_tmt_products) leads from it to the dose. No foreign
+    // key: the drug tables are replaced as a whole by each sync.
+    tpuId: integer("tpu_id"),
     // Products with history are archived (isActive = false), never deleted.
     isActive: boolean("is_active").notNull().default(true),
     createdAt: createdAt(),

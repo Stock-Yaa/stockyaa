@@ -26,6 +26,21 @@ const products = {
   rx: "Rx",
   rxHint: "Prescription required",
 
+  // Link to the TMT drug list (dispensing labels)
+  tmtProduct: "TMT product",
+  tmtHint: "Links this product to the Thai drug list (TMT) so its dispensing label can be suggested. Empty details below are filled in from TMT.",
+  tmtSearchPlaceholder: "Search TMT by trade name, TPU or GPU code",
+  tmtSearching: "Searching…",
+  tmtNoResults: "No TMT product matches.",
+  tmtRemove: "Remove the TMT link",
+  tmtNotFound: "This TMT product is not in the drug database. Search and choose it again.",
+  tmtBadge: "TMT",
+  tmtBadgeHint: "Linked to TMT {tpu}",
+  filterTmt: "TMT link",
+  tmtAll: "Linked or not",
+  tmtLinked: "Linked to TMT",
+  tmtUnlinked: "Not linked to TMT",
+
   // Form
   genericName: "Generic name",
   noCategory: "No category",

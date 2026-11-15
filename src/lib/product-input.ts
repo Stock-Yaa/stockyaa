@@ -56,4 +56,9 @@ export const productSchema = z.object({
   id: optionalId,
   categoryId: optionalId,
   ...productFields,
+  // TMT trade product code, picked from the drug database; blank = none.
+  tpuId: z.preprocess(
+    blankTo(null),
+    nonNegativeInt.refine((v) => v > 0 && v <= 2_147_483_647, "products.tmtNotFound").nullable(),
+  ),
 });

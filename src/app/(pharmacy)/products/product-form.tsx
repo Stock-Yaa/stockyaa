@@ -14,19 +14,36 @@ import type { PhotoRef } from "@/lib/product-images-client";
 import { saveProduct } from "./actions";
 import { PriceFields } from "./price-fields";
 import { ProductPhotos, uploadPhotos, type QueuedPhoto } from "./product-photos";
+import { TmtPicker } from "./tmt-picker";
+import type { TmtSearchResult } from "@/lib/drug-database";
 
 export type CategoryOption = { id: string; name: string };
+
+/** A linked TPU code that is not (or no longer) in the drug database. */
+const unknownTmt = (tpuId: number): TmtSearchResult => ({
+  tpuId,
+  gpuId: 0,
+  tradeName: `TPU ${tpuId}`,
+  manufacturer: null,
+  gpuName: null,
+  activeIngredient: null,
+  strength: null,
+  dosageForm: null,
+});
 
 /** "Add product" button, or a pencil icon when editing, plus the form dialog. */
 export function ProductFormButton({
   product,
   categories,
   photos = [],
+  tmt = null,
 }: {
   product?: Product;
   categories: CategoryOption[];
   /** The saved product's photos, main first. */
   photos?: PhotoRef[];
+  /** The TMT product it is linked to, when it is in the drug database. */
+  tmt?: TmtSearchResult | null;
 }) {
   const t = useT();
   const router = useRouter();
@@ -95,6 +112,10 @@ export function ProductFormButton({
           >
             <Input id="name" name="name" defaultValue={product?.name} required autoFocus />
           </Field>
+          <TmtPicker
+            initial={tmt ?? (product?.tpuId ? unknownTmt(product.tpuId) : null)}
+            error={errors.tpuId}
+          />
           <Field
             label={t("products.genericName")}
             htmlFor="genericName"

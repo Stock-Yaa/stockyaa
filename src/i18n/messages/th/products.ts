@@ -28,6 +28,21 @@ const products: typeof en = {
   rx: "Rx",
   rxHint: "ต้องมีใบสั่งแพทย์",
 
+  // Link to the TMT drug list (dispensing labels)
+  tmtProduct: "รหัสยา TMT",
+  tmtHint: "เชื่อมสินค้านี้กับบัญชียามาตรฐานไทย (TMT) เพื่อให้ระบบแนะนำฉลากยาได้ ช่องรายละเอียดด้านล่างที่ยังว่างจะถูกกรอกจาก TMT",
+  tmtSearchPlaceholder: "ค้นหา TMT ด้วยชื่อการค้า รหัส TPU หรือ GPU",
+  tmtSearching: "กำลังค้นหา…",
+  tmtNoResults: "ไม่พบสินค้า TMT ที่ตรงกัน",
+  tmtRemove: "ยกเลิกการเชื่อม TMT",
+  tmtNotFound: "ไม่พบสินค้า TMT นี้ในฐานข้อมูลยา กรุณาค้นหาและเลือกใหม่",
+  tmtBadge: "TMT",
+  tmtBadgeHint: "เชื่อมกับ TMT {tpu}",
+  filterTmt: "การเชื่อม TMT",
+  tmtAll: "เชื่อมแล้วหรือยังไม่เชื่อม",
+  tmtLinked: "เชื่อม TMT แล้ว",
+  tmtUnlinked: "ยังไม่เชื่อม TMT",
+
   // Form
   genericName: "ชื่อสามัญทางยา",
   noCategory: "ไม่ระบุหมวดหมู่",

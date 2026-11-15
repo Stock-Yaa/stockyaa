@@ -136,7 +136,53 @@ export type TmtSearchResult = {
   tradeName: string;
   manufacturer: string | null;
   gpuName: string | null;
+  activeIngredient: string | null;
+  strength: string | null;
+  dosageForm: string | null;
 };
+
+/** The GPU columns shown next to a TMT product, by gpu_id. */
+async function gpuSummaries(db: Db, gpuIds: number[]) {
+  const rows = gpuIds.length
+    ? await db
+        .selectDistinctOn([drugGpus.gpuId], {
+          gpuId: drugGpus.gpuId,
+          gpuName: drugGpus.gpuName,
+          activeIngredient: drugGpus.activeIngredient,
+          strength: drugGpus.strength,
+          dosageForm: drugGpus.dosageForm,
+        })
+        .from(drugGpus)
+        .where(inArray(drugGpus.gpuId, [...new Set(gpuIds)]))
+        .orderBy(drugGpus.gpuId, drugGpus.sheetRow)
+    : [];
+  return new Map(rows.map((r) => [r.gpuId, r]));
+}
+
+function withGpu(
+  products: (typeof drugTmtProducts.$inferSelect)[],
+  gpus: Awaited<ReturnType<typeof gpuSummaries>>,
+): TmtSearchResult[] {
+  return products.map((p) => {
+    const g = gpus.get(p.gpuId);
+    return {
+      ...p,
+      gpuName: g?.gpuName ?? null,
+      activeIngredient: g?.activeIngredient ?? null,
+      strength: g?.strength ?? null,
+      dosageForm: g?.dosageForm ?? null,
+    };
+  });
+}
+
+/** TMT products by TPU code, for showing what products are linked to. */
+export async function tmtProductsByTpu(db: Db, tpuIds: number[]): Promise<Map<number, TmtSearchResult>> {
+  const ids = [...new Set(tpuIds)];
+  if (ids.length === 0) return new Map();
+  const rows = await db.select().from(drugTmtProducts).where(inArray(drugTmtProducts.tpuId, ids));
+  const list = withGpu(rows, await gpuSummaries(db, rows.map((r) => r.gpuId)));
+  return new Map(list.map((r) => [r.tpuId, r]));
+}
 
 /**
  * TMT products by trade name, or by TPU or GPU code when the query is a
@@ -163,16 +209,7 @@ export async function searchTmtProducts(db: Db, query: string, limit = 20): Prom
     .sort((a, b) => a.starts - b.starts)
     .slice(0, limit)
     .map((x) => x.r);
-  const gpuIds = [...new Set(ranked.map((r) => r.gpuId))];
-  const names = gpuIds.length
-    ? await db
-        .selectDistinctOn([drugGpus.gpuId], { gpuId: drugGpus.gpuId, gpuName: drugGpus.gpuName })
-        .from(drugGpus)
-        .where(inArray(drugGpus.gpuId, gpuIds))
-        .orderBy(drugGpus.gpuId, drugGpus.sheetRow)
-    : [];
-  const nameOf = new Map(names.map((n) => [n.gpuId, n.gpuName]));
-  return ranked.map((r) => ({ ...r, gpuName: nameOf.get(r.gpuId) ?? null }));
+  return withGpu(ranked, await gpuSummaries(db, ranked.map((r) => r.gpuId)));
 }
 
 /** Everything the dose engine needs for one product, or null if the TPU is unknown. */

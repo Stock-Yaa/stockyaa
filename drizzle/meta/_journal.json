@@ -127,6 +127,13 @@
       "when": 1794741736095,
       "tag": "0017_peaceful_luminals",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1794744075084,
+      "tag": "0018_slim_umar",
+      "breakpoints": true
     }
   ]
 }

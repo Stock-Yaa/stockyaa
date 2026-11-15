@@ -4,7 +4,16 @@ import { and, asc, eq, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getDb } from "@/db";
-import { batches, categories, productImages, products, purchaseItems, saleItems } from "@/db/schema";
+import {
+  batches,
+  categories,
+  drugTmtProducts,
+  productImages,
+  products,
+  purchaseItems,
+  saleItems,
+} from "@/db/schema";
+import { searchTmtProducts, type TmtSearchResult } from "@/lib/drug-database";
 import type { MessageKey } from "@/i18n/messages";
 import { getT } from "@/i18n/server";
 import { fieldErrorsFrom, type ActionState } from "@/lib/action";
@@ -67,6 +76,24 @@ export async function saveProduct(formData: FormData): Promise<ActionState> {
     }
   }
 
+  // A TMT code must be in the drug database. One kept unchanged on an edit is
+  // not checked again, so a later sync that drops it does not block saving.
+  if (values.tpuId !== null) {
+    const [current] = id
+      ? await db
+          .select({ tpuId: products.tpuId })
+          .from(products)
+          .where(and(eq(products.id, id), eq(products.pharmacyId, pharmacy.id)))
+      : [];
+    if (current?.tpuId !== values.tpuId) {
+      const [known] = await db
+        .select({ tpuId: drugTmtProducts.tpuId })
+        .from(drugTmtProducts)
+        .where(eq(drugTmtProducts.tpuId, values.tpuId));
+      if (!known) return { ok: false, fieldErrors: { tpuId: t("products.tmtNotFound") } };
+    }
+  }
+
   // One barcode, one product: the till picks a product by its barcode. Bulk
   // import refuses a used barcode the same way.
   if (values.barcode) {
@@ -122,6 +149,13 @@ export async function saveProduct(formData: FormData): Promise<ActionState> {
 
   revalidateProductPages();
   return { ok: true, message: t(id ? "common.updated" : "common.created"), id: productId ?? undefined };
+}
+
+/** TMT products for the product form's picker (the shared drug database). */
+export async function searchTmt(query: string): Promise<TmtSearchResult[]> {
+  await requirePharmacy();
+  if (typeof query !== "string" || query.trim().length < 2 || query.length > 100) return [];
+  return searchTmtProducts(await getDb(), query, 12);
 }
 
 /** Archives (`isActive` false) or restores a product. */
