@@ -50,6 +50,7 @@ const nav: typeof en = {
   profile: "โปรไฟล์ของฉัน",
   pharmacies: "ร้านขายยา",
   plans: "แพ็กเกจ",
+  drugDatabase: "ฐานข้อมูลยา",
   payments: "การชำระเงิน",
   stripe: "Stripe",
   account: "บัญชีของฉัน",

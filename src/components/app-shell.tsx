@@ -156,6 +156,7 @@ const PLATFORM_NAV: NavEntry[] = [
       { href: "/superadmin/pharmacies", label: "nav.pharmacies", icon: Building2 },
       { href: "/superadmin/payments", label: "nav.payments", icon: Wallet },
       { href: "/superadmin/plans", label: "nav.plans", icon: Layers },
+      { href: "/superadmin/drug-database", label: "nav.drugDatabase", icon: Pill },
       { href: "/superadmin/stripe", label: "nav.stripe", icon: Plug },
     ],
   },

@@ -50,6 +50,7 @@ const nav = {
   profile: "My profile",
   pharmacies: "Pharmacies",
   plans: "Plans",
+  drugDatabase: "Drug database",
   payments: "Payments",
   stripe: "Stripe",
   account: "My account",

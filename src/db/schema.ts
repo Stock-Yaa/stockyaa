@@ -7,6 +7,7 @@ import {
   jsonb,
   numeric,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -1012,6 +1013,185 @@ export const productImages = pgTable(
       .where(sql`${t.isMain}`),
   ],
 );
+
+// ---------------------------------------------------------------------------
+// Drug database (platform-wide, managed by the super admin)
+//
+// A copy of the client's "StockYaa drug info database" Google Sheet, replaced
+// as a whole by each sync (src/lib/drug-database.ts). It is shared by every
+// pharmacy, so these tables have no pharmacy_id. The chain from a product to
+// its label is tpu_id -> gpu_id -> ingredient -> dose rule (src/lib/dosing.ts).
+// Rows keep the sheet's approved flag: only approved rows pre-fill a label.
+// `hasErrors` marks a row with a value the sync could not read; such a row
+// is never used for a dose, not even in test mode.
+// ---------------------------------------------------------------------------
+
+const measure = (name: string) => numeric(name, { mode: "number" });
+
+export const DOSE_MODES = ["fixed", "rule", "lead", "none"] as const;
+export const PATIENT_GROUPS = ["adult", "child"] as const;
+
+/** TMT trade products (TPU): every registered brand of a medicine in Thailand. */
+export const drugTmtProducts = pgTable(
+  "drug_tmt_products",
+  {
+    tpuId: integer("tpu_id").primaryKey(),
+    gpuId: integer("gpu_id").notNull(),
+    tradeName: text("trade_name").notNull(),
+    manufacturer: text("manufacturer"),
+  },
+  (t) => [index("drug_tmt_products_gpu_idx").on(t.gpuId)],
+);
+
+/**
+ * TMT generic products (GPU) with the label columns. A GPU can have more than
+ * one row (one per patient group or age band); the TMT columns, dose_mode,
+ * round_to and warning labels are the same on each.
+ */
+export const drugGpus = pgTable(
+  "drug_gpus",
+  {
+    id: id(),
+    gpuId: integer("gpu_id").notNull(),
+    /** Row number in the sheet, to point at it in messages. */
+    sheetRow: integer("sheet_row").notNull(),
+    gpuName: text("gpu_name").notNull(),
+    activeIngredient: text("active_ingredient"),
+    strength: text("strength"),
+    dosageForm: text("dosage_form"),
+    route: text("route"),
+    dispUnit: text("disp_unit"),
+    combination: boolean("combination").notNull().default(false),
+    doseMode: text("dose_mode"),
+    doseIngredient: text("dose_ingredient"),
+    roundTo: measure("round_to"),
+    patientGroup: text("patient_group"),
+    indicationEn: text("indication_en"),
+    indicationTh: text("indication_th"),
+    amountPerDose: measure("amount_per_dose"),
+    amountPerDoseMax: measure("amount_per_dose_max"),
+    amountUnit: text("amount_unit"),
+    timesPerDayMax: measure("times_per_day_max"),
+    intervalHoursMin: measure("interval_hours_min"),
+    asNeeded: boolean("as_needed").notNull().default(false),
+    maxPerDay: measure("max_per_day"),
+    maxPerDayUnit: text("max_per_day_unit"),
+    maxDays: measure("max_days"),
+    minAgeMonths: measure("min_age_months"),
+    maxAgeMonths: measure("max_age_months"),
+    minWeightKg: measure("min_weight_kg"),
+    maxWeightKg: measure("max_weight_kg"),
+    timing: text("timing"),
+    warningLabel1: text("warning_label_1"),
+    warningLabel2: text("warning_label_2"),
+    warningLabel3: text("warning_label_3"),
+    noteEn: text("note_en"),
+    noteTh: text("note_th"),
+    version: integer("version"),
+    approved: boolean("approved").notNull().default(false),
+    hasErrors: boolean("has_errors").notNull().default(false),
+  },
+  (t) => [index("drug_gpus_gpu_idx").on(t.gpuId)],
+);
+
+/** One row per ingredient of a GPU, with its strength as numbers. */
+export const drugGpuIngredients = pgTable(
+  "drug_gpu_ingredients",
+  {
+    gpuId: integer("gpu_id").notNull(),
+    position: integer("position").notNull(),
+    ingredient: text("ingredient").notNull(),
+    ingredientStrength: text("ingredient_strength"),
+    route: text("route"),
+    strengthAmount: measure("strength_amount"),
+    strengthUnit: text("strength_unit"),
+    perAmount: measure("per_amount"),
+    perUnit: text("per_unit"),
+  },
+  (t) => [primaryKey({ columns: [t.gpuId, t.position] })],
+);
+
+/** Dose rules: one row per ingredient, route, patient group and age or weight band. */
+export const drugDosing = pgTable(
+  "drug_dosing",
+  {
+    id: id(),
+    sheetRow: integer("sheet_row").notNull(),
+    ingredient: text("ingredient").notNull(),
+    route: text("route").notNull(),
+    dosageForm: text("dosage_form"),
+    patientGroup: text("patient_group"),
+    indicationEn: text("indication_en"),
+    indicationTh: text("indication_th"),
+    doseBasis: text("dose_basis"),
+    doseLow: measure("dose_low"),
+    doseHigh: measure("dose_high"),
+    doseUnit: text("dose_unit"),
+    dosePeriod: text("dose_period"),
+    timesPerDayMax: measure("times_per_day_max"),
+    intervalHoursMin: measure("interval_hours_min"),
+    asNeeded: boolean("as_needed").notNull().default(false),
+    maxSingleDose: measure("max_single_dose"),
+    maxSingleDoseUnit: text("max_single_dose_unit"),
+    maxPerDay: measure("max_per_day"),
+    maxPerDayUnit: text("max_per_day_unit"),
+    maxDays: measure("max_days"),
+    minAgeMonths: measure("min_age_months"),
+    maxAgeMonths: measure("max_age_months"),
+    minWeightKg: measure("min_weight_kg"),
+    maxWeightKg: measure("max_weight_kg"),
+    timing: text("timing"),
+    noteEn: text("note_en"),
+    noteTh: text("note_th"),
+    source: text("source"),
+    version: integer("version"),
+    approved: boolean("approved").notNull().default(false),
+    hasErrors: boolean("has_errors").notNull().default(false),
+  },
+  (t) => [index("drug_dosing_ingredient_idx").on(t.ingredient, t.route)],
+);
+
+/** The information card for an ingredient given by a route. */
+export const drugInfo = pgTable(
+  "drug_info",
+  {
+    ingredient: text("ingredient").notNull(),
+    route: text("route").notNull(),
+    nameTh: text("name_th"),
+    drugClass: text("drug_class"),
+    /** The card's text sections, keyed by sheet column (indication_en, …). */
+    sections: jsonb("sections").$type<Record<string, string>>().notNull(),
+    source: text("source"),
+    version: integer("version"),
+    approved: boolean("approved").notNull().default(false),
+  },
+  (t) => [primaryKey({ columns: [t.ingredient, t.route] })],
+);
+
+/** Warning sticker texts, by code (W001, …). */
+export const drugWarningLabels = pgTable("drug_warning_labels", {
+  code: text("code").primaryKey(),
+  textEn: text("text_en"),
+  textTh: text("text_th"),
+  version: integer("version"),
+  approved: boolean("approved").notNull().default(false),
+});
+
+export type DrugSyncProblem = "number" | "wholeNumber" | "yesNo" | "value" | "required" | "duplicate";
+export type DrugSyncIssue = { tab: string; row: number; column: string; value: string; problem: DrugSyncProblem };
+
+/** One row per sync of the drug database; the latest is what is loaded. */
+export const drugDatabaseSyncs = pgTable("drug_database_syncs", {
+  id: id(),
+  sourceUrl: text("source_url").notNull(),
+  /** Rows loaded per tab, and how many of them are approved. */
+  counts: jsonb("counts").$type<Record<string, { rows: number; approved?: number }>>().notNull(),
+  /** Cells the sync could not read (the first few hundred). */
+  issues: jsonb("issues").$type<DrugSyncIssue[]>().notNull(),
+  issueCount: integer("issue_count").notNull().default(0),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+  createdAt: createdAt(),
+});
 
 // ---------------------------------------------------------------------------
 // Relations (for db.query.*)
