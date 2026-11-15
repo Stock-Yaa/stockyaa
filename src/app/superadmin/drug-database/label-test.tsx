@@ -1,5 +1,6 @@
 import { Search, TriangleAlert } from "lucide-react";
 import Link from "next/link";
+import { DrugInfoCards } from "@/components/drug-info-card";
 import { Badge } from "@/components/ui/card";
 import { Button, buttonClass } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/form";
@@ -9,7 +10,6 @@ import { createTranslator, getMessages, type MessageKey } from "@/i18n/messages"
 import { getT } from "@/i18n/server";
 import { loadDrugData, loadDrugInfo, searchTmtProducts } from "@/lib/drug-database";
 import { buildLabelText, type LabelLanguage } from "@/lib/drug-label";
-import { DRUG_INFO_SECTIONS } from "@/lib/drug-sheet";
 import { suggestLabel, type NoDirectionsReason, type Patient } from "@/lib/dosing";
 
 export type LabelTestParams = {
@@ -43,20 +43,6 @@ const REASON_KEYS: Record<NoDirectionsReason, MessageKey> = {
   noRoundTo: "drugDb.reasonNoRoundTo",
   roundingOff: "drugDb.reasonRoundingOff",
   noAmount: "drugDb.reasonNoAmount",
-};
-
-const INFO_KEYS: Record<(typeof DRUG_INFO_SECTIONS)[number], MessageKey> = {
-  indication: "drugDb.infoIndication",
-  contraindications: "drugDb.infoContraindications",
-  pregnancy: "drugDb.infoPregnancy",
-  breastfeeding: "drugDb.infoBreastfeeding",
-  elderly: "drugDb.infoElderly",
-  kidney_liver: "drugDb.infoKidneyLiver",
-  side_effects_common: "drugDb.infoSideEffectsCommon",
-  side_effects_serious: "drugDb.infoSideEffectsSerious",
-  food_alcohol_driving: "drugDb.infoFoodAlcoholDriving",
-  counselling: "drugDb.infoCounselling",
-  storage: "drugDb.infoStorage",
 };
 
 const wholeNumber = (v: string) => (/^\d{1,3}$/.test(v.trim()) ? Number(v) : null);
@@ -308,34 +294,7 @@ async function LabelResult({
 
       <div className="grid content-start gap-3">
         <h3 className="text-sm font-semibold">{t("drugDb.drugInfoTitle")}</h3>
-        {info.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t("drugDb.noDrugInfo")}</p>
-        ) : (
-          info.map((row) => (
-            <div key={`${row.ingredient}/${row.route}`} className="grid gap-2 rounded-lg border border-border p-4 text-sm">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="font-semibold">
-                  {row.ingredient}
-                  {row.nameTh && <span className="font-normal text-muted-foreground"> · {row.nameTh}</span>}
-                </p>
-                {!row.approved && <Badge tone="warning">{t("drugDb.testModeBadge")}</Badge>}
-              </div>
-              {row.drugClass && <p className="text-muted-foreground">{row.drugClass}</p>}
-              <dl className="grid gap-2">
-                {DRUG_INFO_SECTIONS.map((section) => {
-                  const text = pick(row.sections[`${section}_en`], row.sections[`${section}_th`]);
-                  if (!text) return null;
-                  return (
-                    <div key={section}>
-                      <dt className="text-xs font-medium text-muted-foreground">{t(INFO_KEYS[section])}</dt>
-                      <dd className="whitespace-pre-line">{text}</dd>
-                    </div>
-                  );
-                })}
-              </dl>
-            </div>
-          ))
-        )}
+        <DrugInfoCards rows={info} lang={lang} unapprovedBadge={t("drugDb.testModeBadge")} />
       </div>
     </div>
   );

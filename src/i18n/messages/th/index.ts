@@ -31,6 +31,7 @@ import aiSettings from "./aiSettings";
 import taxReceipt from "./taxReceipt";
 import drugDb from "./drugDb";
 import drugLabel from "./drugLabel";
+import dispensing from "./dispensing";
 
 const messages = {
   common,
@@ -66,6 +67,7 @@ const messages = {
   taxReceipt,
   drugDb,
   drugLabel,
+  dispensing,
 };
 
 export default messages;

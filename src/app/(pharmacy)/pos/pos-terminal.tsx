@@ -8,6 +8,7 @@ import {
   Landmark,
   Minus,
   PackageSearch,
+  Pill,
   Percent,
   Plus,
   Printer,
@@ -743,6 +744,15 @@ export function PosTerminal({
                   {t("pos.printTaxReceipt")}
                 </Link>
               )}
+              <Link
+                href={`/sales/${completed.saleId}/labels`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={buttonClass({ variant: "outline" })}
+              >
+                <Pill />
+                {t("dispensing.open")}
+              </Link>
               <Button autoFocus onClick={startNewSale}>
                 <Plus />
                 {t("pos.newSale")}

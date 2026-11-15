@@ -5,6 +5,13 @@ const drugLabel: typeof en = {
   amount: "ครั้งละ {amount} {unit}",
   range: "{low}–{high}",
   joiner: " ",
+
+  // Captions printed on the sticker
+  captionPatient: "ชื่อ",
+  captionDate: "วันที่",
+  captionQuantity: "จำนวน",
+  captionPharmacist: "เภสัชกร",
+  captionFor: "ข้อบ่งใช้",
   whenNeeded: "เมื่อมีอาการ",
   everyHoursWhenNeeded: "ทุก {hours} ชั่วโมง เมื่อมีอาการ",
   atMostTimesADay: "วันละไม่เกิน {count} ครั้ง",

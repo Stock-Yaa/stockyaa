@@ -1,5 +1,5 @@
 import { and, asc, eq } from "drizzle-orm";
-import { ArrowLeft, FileText, Undo2 } from "lucide-react";
+import { ArrowLeft, FileText, Pill, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { buttonClass } from "@/components/ui/button";
@@ -217,6 +217,10 @@ export default async function SaleReceiptPage({
             {t("taxReceipt.viewCredit", { number: creditNumber })}
           </Link>
         )}
+        <Link href={`/sales/${sale.id}/labels`} className={buttonClass({ variant: "outline" })}>
+          <Pill />
+          {t("dispensing.open")}
+        </Link>
         <PrintButton auto={print === "1"} />
       </PageHeader>
 

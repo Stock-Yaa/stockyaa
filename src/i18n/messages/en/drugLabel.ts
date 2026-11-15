@@ -3,6 +3,13 @@ const drugLabel = {
   amount: "Take {amount} {unit}",
   range: "{low}–{high}",
   joiner: ", ",
+
+  // Captions printed on the sticker
+  captionPatient: "Name",
+  captionDate: "Date",
+  captionQuantity: "Qty",
+  captionPharmacist: "Pharmacist",
+  captionFor: "For",
   whenNeeded: "when needed",
   everyHoursWhenNeeded: "every {hours} hours when needed",
   atMostTimesADay: "at most {count} times a day",
