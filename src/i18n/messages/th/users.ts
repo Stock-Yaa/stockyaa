@@ -52,6 +52,10 @@ const users: typeof en = {
   myPinTitle: "PIN ลิ้นชักเก็บเงิน",
   myPinDescription: "ใช้ PIN นี้เพื่อเปิด นับ และปิดกะลิ้นชักเก็บเงิน และเพื่ออนุมัติในฐานะผู้จัดการ",
   roleManager: "ผู้จัดการ",
+
+  // Dispensing label design (17 November 2026)
+  pharmacistLicense: "เลขที่ใบอนุญาตเภสัชกร (ภ.)",
+  pharmacistLicenseHint: "สำหรับเภสัชกร ใส่เฉพาะตัวเลข เช่น 12345 (ฉลากเติม ภ. ให้เอง) พิมพ์พร้อมชื่อบนฉลากยา พนักงานอื่นเว้นว่างไว้",
 };
 
 export default users;

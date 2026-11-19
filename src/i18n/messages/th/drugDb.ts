@@ -46,6 +46,7 @@ const drugDb: typeof en = {
   problemValue: "ไม่ใช่ค่าที่อนุญาต",
   problemRequired: "ว่าง แต่จำเป็นต้องมี",
   problemDuplicate: "ซ้ำกัน แถวนี้ถูกข้าม",
+  problemInconsistent: "ตัวเลขขัดแย้งกัน (ขนาดยาเกินขีดจำกัดของแถวเอง)",
 
   // Test a label
   testTitle: "ทดสอบฉลากยา",
@@ -94,6 +95,9 @@ const drugDb: typeof en = {
   reasonGpuNotApproved: "แถว GPU ยังไม่ได้รับการอนุมัติ",
   reasonNoDoseMode: "สินค้านี้ไม่มีขนาดยา (dose_mode เป็น none หรือว่าง)",
   reasonNeedsAge: "กรุณากรอกอายุของเด็ก",
+  reasonNeedsGroup: "กรุณาเลือกผู้ใหญ่หรือเด็ก",
+  reasonExceedsDailyMax: "ขนาดยาต่ำสุดเกินขนาดสูงสุดต่อวันหารด้วยจำนวนครั้งต่อวัน",
+  reasonImplausibleAmount: "ปริมาณยาต่อครั้งไม่สมเหตุสมผลสำหรับสินค้านี้ (เกิน 10 หน่วย หรือ 60 มล.)",
   reasonNoRowFits: "ไม่มีแถวขนาดยาที่ตรงกับผู้ป่วยรายนี้",
   reasonRowsTie: "มีแถวขนาดยามากกว่าหนึ่งแถวที่ตรงกับผู้ป่วยเท่ากัน",
   reasonRowNotApproved: "แถวขนาดยาที่ตรงกันยังไม่ได้รับการอนุมัติ",

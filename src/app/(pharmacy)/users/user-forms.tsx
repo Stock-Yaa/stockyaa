@@ -15,6 +15,7 @@ export type UserRow = {
   email: string;
   role: "admin" | "manager" | "staff";
   branchId: string | null;
+  pharmacistLicense: string | null;
 };
 
 export type BranchOption = { id: string; name: string };
@@ -117,6 +118,14 @@ function UserForm({
           </Select>
         </Field>
       )}
+      <Field
+        label={t("users.pharmacistLicense")}
+        htmlFor="user-license"
+        error={errors.pharmacistLicense}
+        hint={t("users.pharmacistLicenseHint")}
+      >
+        <Input id="user-license" name="pharmacistLicense" defaultValue={user?.pharmacistLicense ?? ""} maxLength={50} />
+      </Field>
       {!user && (
         <Field
           label={t("users.password")}

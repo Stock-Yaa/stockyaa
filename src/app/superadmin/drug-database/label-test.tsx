@@ -28,6 +28,7 @@ const REASON_KEYS: Record<NoDirectionsReason, MessageKey> = {
   noGpu: "drugDb.reasonNoGpu",
   gpuNotApproved: "drugDb.reasonGpuNotApproved",
   noDoseMode: "drugDb.reasonNoDoseMode",
+  needsGroup: "drugDb.reasonNeedsGroup",
   needsAge: "drugDb.reasonNeedsAge",
   noRowFits: "drugDb.reasonNoRowFits",
   rowsTie: "drugDb.reasonRowsTie",
@@ -42,6 +43,8 @@ const REASON_KEYS: Record<NoDirectionsReason, MessageKey> = {
   unitMismatch: "drugDb.reasonUnitMismatch",
   noRoundTo: "drugDb.reasonNoRoundTo",
   roundingOff: "drugDb.reasonRoundingOff",
+  exceedsDailyMax: "drugDb.reasonExceedsDailyMax",
+  implausibleAmount: "drugDb.reasonImplausibleAmount",
   noAmount: "drugDb.reasonNoAmount",
 };
 
@@ -198,7 +201,7 @@ async function LabelResult({
   link: (patch: Partial<LabelTestParams>) => string;
 }) {
   const [t, db] = await Promise.all([getT(), getDb()]);
-  const s = suggestLabel(data, patient, { includeUnapproved: test, indication });
+  const s = suggestLabel(data, patient, { includeUnapproved: test, indicationRow: indication });
   const label = buildLabelText(s, createTranslator(getMessages(lang)), lang);
   const d = s.directions;
   const info = (
@@ -244,13 +247,13 @@ async function LabelResult({
           <div className="grid gap-2">
             <p className="text-sm">{t("drugDb.chooseIndication")}</p>
             <div className="flex flex-wrap gap-2">
-              {s.indicationChoices.map((c, i) => (
+              {s.indicationChoices.map((c) => (
                 <Link
-                  key={i}
-                  href={link({ ind: String(i) })}
-                  className={buttonClass({ variant: indication === i ? "primary" : "outline", size: "sm" })}
+                  key={c.sheetRow}
+                  href={link({ ind: String(c.sheetRow) })}
+                  className={buttonClass({ variant: indication === c.sheetRow ? "primary" : "outline", size: "sm" })}
                 >
-                  {pick(c.indicationEn ?? undefined, c.indicationTh ?? undefined) || `#${i + 1}`}
+                  {pick(c.indicationEn ?? undefined, c.indicationTh ?? undefined) || `#${c.sheetRow}`}
                 </Link>
               ))}
             </div>

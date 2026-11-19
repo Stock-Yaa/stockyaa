@@ -26,6 +26,7 @@ const PROBLEM_KEYS: Record<DrugSyncIssue["problem"], MessageKey> = {
   value: "drugDb.problemValue",
   required: "drugDb.problemRequired",
   duplicate: "drugDb.problemDuplicate",
+  inconsistent: "drugDb.problemInconsistent",
 };
 
 export default async function DrugDatabasePage({

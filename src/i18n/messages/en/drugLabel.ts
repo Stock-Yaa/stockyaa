@@ -1,6 +1,16 @@
 // Phrases printed on a dispensing label (src/lib/drug-label.ts).
 const drugLabel = {
-  amount: "Take {amount} {unit}",
+  // The amount per dose, then the verb for the route around it.
+  dose: "{dose}",
+  verbOral: "Take {text}",
+  verbApply: "Apply {text}",
+  verbInhale: "Inhale {text}",
+  verbInsert: "Insert {text}",
+  verbUse: "Use {text}",
+  halfTablet: "half a tablet",
+  andAHalfTablets: "{count} and a half tablets",
+  andAHalfTabletsOne: "one and a half tablets",
+  rangeWords: "{low} to {high}",
   range: "{low}–{high}",
   joiner: ", ",
 
@@ -10,6 +20,16 @@ const drugLabel = {
   captionQuantity: "Qty",
   captionPharmacist: "Pharmacist",
   captionFor: "For",
+
+  // The sticker of the label design (src/components/dispensing-sticker.tsx)
+  slotMorning: "Morning",
+  slotNoon: "Noon",
+  slotEvening: "Evening",
+  slotBedtime: "Bedtime",
+  stickerQuantity: "Quantity:",
+  stickerUsedFor: "Used for",
+  licensePrefix: "Lic. ",
+  signature: "Signature",
   whenNeeded: "when needed",
   everyHoursWhenNeeded: "every {hours} hours when needed",
   atMostTimesADay: "at most {count} times a day",

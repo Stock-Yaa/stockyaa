@@ -14,6 +14,8 @@ export type NavLink = {
   icon: LucideIcon;
   /** Shown to pharmacy admins only. */
   adminOnly?: boolean;
+  /** Shown to admins and managers, not staff (pages with patient data). */
+  managersOnly?: boolean;
   /** Hidden for a pharmacy that runs a single branch on a Standard plan. */
   multiBranchOnly?: boolean;
 };

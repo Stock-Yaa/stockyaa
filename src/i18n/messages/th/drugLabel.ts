@@ -2,7 +2,17 @@ import type en from "../en/drugLabel";
 
 // วลีที่พิมพ์บนฉลากยา (src/lib/drug-label.ts) คำบอกเวลาตามที่ระบุในแท็บ Guide ของชีต
 const drugLabel: typeof en = {
-  amount: "ครั้งละ {amount} {unit}",
+  // ปริมาณต่อครั้ง แล้วคำกริยาตามวิธีใช้ (ภาษาไทยใช้ "รับประทาน" กับยากินเท่านั้น)
+  dose: "ครั้งละ {dose}",
+  verbOral: "รับประทาน{text}",
+  verbApply: "{text}",
+  verbInhale: "{text}",
+  verbInsert: "{text}",
+  verbUse: "{text}",
+  halfTablet: "ครึ่งเม็ด",
+  andAHalfTablets: "{count} เม็ดครึ่ง",
+  andAHalfTabletsOne: "1 เม็ดครึ่ง",
+  rangeWords: "{low} ถึง {high}",
   range: "{low}–{high}",
   joiner: " ",
 
@@ -12,6 +22,16 @@ const drugLabel: typeof en = {
   captionQuantity: "จำนวน",
   captionPharmacist: "เภสัชกร",
   captionFor: "ข้อบ่งใช้",
+
+  // The sticker of the label design (src/components/dispensing-sticker.tsx)
+  slotMorning: "เช้า",
+  slotNoon: "กลางวัน",
+  slotEvening: "เย็น",
+  slotBedtime: "ก่อนนอน",
+  stickerQuantity: "จำนวน",
+  stickerUsedFor: "ใช้สำหรับ",
+  licensePrefix: "ภ.",
+  signature: "ลงชื่อ",
   whenNeeded: "เมื่อมีอาการ",
   everyHoursWhenNeeded: "ทุก {hours} ชั่วโมง เมื่อมีอาการ",
   atMostTimesADay: "วันละไม่เกิน {count} ครั้ง",

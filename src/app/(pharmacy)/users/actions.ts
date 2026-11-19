@@ -17,6 +17,7 @@ import { hashPin, pinField } from "@/lib/pin";
 import {
   formToObject,
   optionalId,
+  optionalText,
   requiredEmail,
   requiredId,
   requiredText,
@@ -43,6 +44,8 @@ const userSchema = z.object({
   email: requiredEmail,
   role: pharmacyRole,
   branchId: optionalId,
+  // Printed with the name on dispensing labels (Thai GPP); blank for non-pharmacists.
+  pharmacistLicense: optionalText(50),
   password: z.preprocess((v) => (v === "" ? undefined : v), passwordField.optional()),
 });
 
@@ -110,7 +113,7 @@ export async function saveUser(formData: FormData): Promise<ActionState> {
       fieldErrors: fieldErrorsFrom(parsed.error, (m) => t(m as MessageKey)),
     };
   }
-  const { id, name, email, role, password } = parsed.data;
+  const { id, name, email, role, password, pharmacistLicense } = parsed.data;
   const branchId = role === "admin" ? null : parsed.data.branchId;
   if (!id && !password) return { ok: false, fieldErrors: { password: t("common.required") } };
   if (role !== "admin" && !branchId) {
@@ -146,6 +149,7 @@ export async function saveUser(formData: FormData): Promise<ActionState> {
           email,
           role,
           branchId,
+          pharmacistLicense,
           passwordHash: passwordHash!,
           pharmacyId: pharmacy.id,
         });
@@ -175,7 +179,7 @@ export async function saveUser(formData: FormData): Promise<ActionState> {
         return "users.adminLimit";
       }
       // A password typed on the edit form is ignored: resetting has its own dialog.
-      await tx.update(users).set({ name, email, role, branchId }).where(eq(users.id, id));
+      await tx.update(users).set({ name, email, role, branchId, pharmacistLicense }).where(eq(users.id, id));
       return null;
     });
     if (refusal === "users.branchRequired") {

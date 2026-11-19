@@ -7,7 +7,12 @@ import { currencyOptions, timezoneOptions } from "@/lib/options";
 import { todayInTimezone } from "@/lib/dates";
 import { getDb } from "@/db";
 import { NUMBER_SERIES, branchCodeOf, counterScope, getCounter, seriesFormat } from "@/lib/numbering";
+import { createTranslator, getMessages } from "@/i18n/messages";
+import { stickerWords } from "@/lib/label-layout";
+import { now } from "@/lib/time";
 import { CashRulesForm } from "./cash-rules-form";
+import { LabelSettingsForm } from "./label-settings-form";
+import { sampleLabel } from "./label-sample";
 import { InvoiceFormatForm } from "./invoice-format-form";
 import { ProfileForm } from "./profile-form";
 
@@ -112,6 +117,28 @@ export default async function SettingsPage() {
                 payoutApprovalLimit: pharmacy.payoutApprovalLimit,
                 cashRecounts: pharmacy.cashRecounts,
               }}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {user.role === "admin" && (
+        <Card className="mt-6 max-w-5xl">
+          <CardHeader className="block">
+            <CardTitle>{t("settings.labelTitle")}</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">{t("settings.labelDescription")}</p>
+          </CardHeader>
+          <CardContent>
+            <LabelSettingsForm
+              settings={{
+                labelPreset: pharmacy.labelPreset,
+                labelWidthMm: pharmacy.labelWidthMm,
+                labelHeightMm: pharmacy.labelHeightMm,
+                labelRotate: pharmacy.labelRotate,
+                labelLogo: pharmacy.labelLogo,
+              }}
+              sample={sampleLabel(createTranslator(getMessages(locale)), pharmacy, branch, locale, now())}
+              words={stickerWords(createTranslator(getMessages(locale)))}
             />
           </CardContent>
         </Card>

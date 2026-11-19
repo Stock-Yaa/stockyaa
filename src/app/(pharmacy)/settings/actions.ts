@@ -4,7 +4,8 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getDb } from "@/db";
-import { INVOICE_DATE_FORMATS, pharmacies } from "@/db/schema";
+import { INVOICE_DATE_FORMATS, LABEL_PRESETS, pharmacies } from "@/db/schema";
+import { MAX_LABEL_MM, MIN_LABEL_MM } from "@/lib/label-layout";
 import type { MessageKey } from "@/i18n/messages";
 import { getT } from "@/i18n/server";
 import { fieldErrorsFrom, type ActionState } from "@/lib/action";
@@ -228,4 +229,63 @@ export async function updatePharmacyProfile(formData: FormData): Promise<ActionS
   // The shell shows the pharmacy name and every page formats with its currency.
   revalidatePath("/", "layout");
   return { ok: true, message: t("settings.profileSaved") };
+}
+
+// A logo turned black and white in the browser, as a small PNG data URL.
+const MAX_LOGO_LENGTH = 200_000;
+
+const labelSettingsSchema = z
+  .object({
+    labelPreset: z.enum(LABEL_PRESETS, { error: "settings.invalidOption" }),
+    labelWidthMm: z.preprocess((v) => (v === "" || v === undefined ? null : v), positiveInt.nullable()),
+    labelHeightMm: z.preprocess((v) => (v === "" || v === undefined ? null : v), positiveInt.nullable()),
+    labelRotate: checkbox,
+    labelLogo: z
+      .string()
+      .max(MAX_LOGO_LENGTH, "settings.labelLogoTooLarge")
+      .refine((v) => v === "" || v.startsWith("data:image/png;base64,"), "settings.labelLogoInvalid"),
+  })
+  .superRefine((v, ctx) => {
+    if (v.labelPreset !== "custom") return;
+    const w = v.labelWidthMm;
+    const h = v.labelHeightMm;
+    if (w === null || w < MIN_LABEL_MM.width || w > MAX_LABEL_MM.width) {
+      ctx.addIssue({ code: "custom", path: ["labelWidthMm"], message: "settings.labelSizeRange" });
+    }
+    if (h === null || h < MIN_LABEL_MM.height || h > MAX_LABEL_MM.height) {
+      ctx.addIssue({ code: "custom", path: ["labelHeightMm"], message: "settings.labelSizeRange" });
+    }
+  });
+
+/** The dispensing label sticker: size, rotation and logo (admins). */
+export async function updateLabelSettings(formData: FormData): Promise<ActionState> {
+  const { user, pharmacy } = await requirePharmacy();
+  const t = await getT();
+  if (user.role !== "admin") return { ok: false, message: t("settings.adminOnly") };
+
+  const parsed = labelSettingsSchema.safeParse(formToObject(formData));
+  if (!parsed.success) {
+    return {
+      ok: false,
+      fieldErrors: fieldErrorsFrom(parsed.error, (m) =>
+        t(m as MessageKey, { min: `${MIN_LABEL_MM.width} × ${MIN_LABEL_MM.height}`, max: `${MAX_LABEL_MM.width} × ${MAX_LABEL_MM.height}` }),
+      ),
+    };
+  }
+  const v = parsed.data;
+  const custom = v.labelPreset === "custom";
+  const db = await getDb();
+  await db
+    .update(pharmacies)
+    .set({
+      labelPreset: v.labelPreset,
+      labelWidthMm: custom ? v.labelWidthMm : null,
+      labelHeightMm: custom ? v.labelHeightMm : null,
+      labelRotate: v.labelRotate,
+      labelLogo: v.labelLogo || null,
+    })
+    .where(eq(pharmacies.id, pharmacy.id));
+
+  revalidatePath("/settings");
+  return { ok: true, message: t("common.updated") };
 }

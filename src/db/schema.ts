@@ -89,6 +89,10 @@ export const MOVEMENT_TYPES = [
 // A transfer leaves the sending branch when created and reaches the other
 // branch when received; cancelling one in transit returns the stock.
 export const TRANSFER_STATUSES = ["in_transit", "received", "cancelled"] as const;
+// Dispensing label sticker sizes (src/lib/label-layout.ts): presets named as
+// the stickers are sold, or a custom size laid out like the nearest preset.
+export const LABEL_PRESETS = ["standard", "compact", "large", "xl", "custom"] as const;
+export const LABEL_LANGUAGES = ["th", "en"] as const;
 
 // ---------------------------------------------------------------------------
 // Platform (super admin)
@@ -168,6 +172,15 @@ export const pharmacies = pgTable("pharmacies", {
   cashMajorTolerance: money("cash_major_tolerance").notNull().default(200),
   payoutApprovalLimit: money("payout_approval_limit").notNull().default(300),
   cashRecounts: integer("cash_recounts").notNull().default(1),
+  // Dispensing labels: the sticker the pharmacy prints on, chosen once.
+  labelPreset: text("label_preset", { enum: LABEL_PRESETS }).notNull().default("standard"),
+  // Custom sticker size in mm (labelPreset = custom).
+  labelWidthMm: integer("label_width_mm"),
+  labelHeightMm: integer("label_height_mm"),
+  // Print the label turned 90 degrees, for printers fed a narrow roll.
+  labelRotate: boolean("label_rotate").notNull().default(false),
+  // Logo for the label, already black and white, as a small PNG data URL.
+  labelLogo: text("label_logo"),
   createdAt: createdAt(),
 });
 
@@ -244,6 +257,8 @@ export const users = pgTable(
     loginFailures: integer("login_failures").notNull().default(0),
     loginLockedUntil: timestamp("login_locked_until", { withTimezone: true }),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+    // Pharmacist licence number (ภ.), printed with the name on dispensing labels.
+    pharmacistLicense: text("pharmacist_license"),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("users_email_idx").on(t.email)],
@@ -1177,11 +1192,21 @@ export const drugWarningLabels = pgTable("drug_warning_labels", {
   code: text("code").primaryKey(),
   textEn: text("text_en"),
   textTh: text("text_th"),
+  // Must appear on the patient's label: printed on a second sticker if it does not fit.
+  mustPrint: boolean("must_print").notNull().default(false),
   version: integer("version"),
   approved: boolean("approved").notNull().default(false),
 });
 
-export type DrugSyncProblem = "number" | "wholeNumber" | "yesNo" | "value" | "required" | "duplicate";
+export type DrugSyncProblem =
+  | "number"
+  | "wholeNumber"
+  | "yesNo"
+  | "value"
+  | "required"
+  | "duplicate"
+  // A Dosing row whose numbers contradict each other (dose above its own limits).
+  | "inconsistent";
 export type DrugSyncIssue = { tab: string; row: number; column: string; value: string; problem: DrugSyncProblem };
 
 /** One row per sync of the drug database; the latest is what is loaded. */
@@ -1196,6 +1221,45 @@ export const drugDatabaseSyncs = pgTable("drug_database_syncs", {
   userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
   createdAt: createdAt(),
 });
+
+/**
+ * What was printed on each dispensing label: the record of what was dispensed
+ * (Thai GPP). Branch data. Holds patient names, so it is shown to admins and
+ * managers only, and never in reports. A label printed from the POS before
+ * the sale is completed has no sale.
+ */
+export const dispensedLabels = pgTable(
+  "dispensed_labels",
+  {
+    id: id(),
+    pharmacyId: uuid("pharmacy_id")
+      .notNull()
+      .references(() => pharmacies.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id")
+      .notNull()
+      .references(() => branches.id, { onDelete: "cascade" }),
+    saleId: uuid("sale_id").references(() => sales.id, { onDelete: "set null" }),
+    productId: uuid("product_id").references(() => products.id, { onDelete: "set null" }),
+    // Who printed it, and the pharmacist named on it.
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    pharmacistId: uuid("pharmacist_id").references(() => users.id, { onDelete: "set null" }),
+    pharmacistName: text("pharmacist_name").notNull(),
+    pharmacistLicense: text("pharmacist_license").notNull(),
+    patientName: text("patient_name").notNull(),
+    language: text("language", { enum: LABEL_LANGUAGES }).notNull(),
+    preset: text("preset", { enum: LABEL_PRESETS }).notNull(),
+    indication: text("indication").notNull(),
+    /** The label exactly as printed (drug, quantity, directions, slots, warnings). */
+    printed: jsonb("printed").$type<Record<string, unknown>>().notNull(),
+    /** The Thai suggestion for the same item, kept when the label was printed in English. */
+    thai: jsonb("thai").$type<Record<string, unknown>>(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("dispensed_labels_pharmacy_idx").on(t.pharmacyId, t.createdAt),
+    index("dispensed_labels_sale_idx").on(t.saleId),
+  ],
+);
 
 // ---------------------------------------------------------------------------
 // Relations (for db.query.*)

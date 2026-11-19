@@ -46,6 +46,7 @@ const drugDb = {
   problemValue: "Not one of the allowed values",
   problemRequired: "Empty, but needed",
   problemDuplicate: "Listed twice; this row was skipped",
+  problemInconsistent: "Numbers contradict each other (dose above its own limit)",
 
   // Test a label
   testTitle: "Test a label",
@@ -94,6 +95,9 @@ const drugDb = {
   reasonGpuNotApproved: "The GPU row is not approved yet.",
   reasonNoDoseMode: "This product has no dose (dose_mode is none or empty).",
   reasonNeedsAge: "Enter the child's age.",
+  reasonNeedsGroup: "Choose adult or child.",
+  reasonExceedsDailyMax: "The smallest dose is above the daily maximum divided by the times a day.",
+  reasonImplausibleAmount: "The amount per dose is implausible for this product (over 10 units or 60 mL).",
   reasonNoRowFits: "No dose row fits this patient.",
   reasonRowsTie: "More than one dose row fits this patient equally.",
   reasonRowNotApproved: "The dose row that fits is not approved yet.",

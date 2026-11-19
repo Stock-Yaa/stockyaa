@@ -10,6 +10,7 @@ import {
   drugTmtProducts,
   drugWarningLabels,
 } from "@/db/schema";
+import { convertUnit } from "./dosing";
 
 /*
  * Turns the tabs of the "StockYaa drug info database" workbook into rows for
@@ -105,6 +106,11 @@ class RowReader {
     readonly row: number,
     private readonly issues: Issues,
   ) {}
+
+  /** Whether the tab has this column (for optional columns). */
+  has(column: string): boolean {
+    return this.header.has(column);
+  }
 
   private raw(column: string): string {
     return (this.cells[this.header.get(column)!] ?? "").trim();
@@ -222,6 +228,49 @@ const INFO_COLUMNS = [
   "ingredient", "route", "name_th", "drug_class", "source", "version", "approved",
   ...DRUG_INFO_SECTIONS.flatMap((s) => [`${s}_en`, `${s}_th`]),
 ];
+
+/**
+ * A Dosing row whose numbers contradict each other, with units that can be
+ * compared: the dose above the daily maximum it would add up to, above its
+ * own single-dose cap, or a range whose top is below its bottom. Such a row
+ * is never used for a dose. Returns the column and a short description.
+ */
+export function dosingContradiction(row: {
+  doseLow: number | null;
+  doseHigh: number | null;
+  doseUnit: string | null;
+  dosePeriod: string | null;
+  timesPerDayMax: number | null;
+  maxSingleDose: number | null;
+  maxSingleDoseUnit: string | null;
+  maxPerDay: number | null;
+  maxPerDayUnit: string | null;
+}): { column: string; value: string } | null {
+  const { doseLow, doseUnit } = row;
+  const doseHigh = row.doseHigh ?? doseLow;
+  if (doseLow === null || doseHigh === null || !doseUnit) return null;
+  const range = doseLow === doseHigh ? `${doseLow}` : `${doseLow}–${doseHigh}`;
+  if (doseHigh < doseLow) return { column: "dose_high", value: `${range} ${doseUnit}` };
+  if (row.maxSingleDose !== null) {
+    const cap = convertUnit(row.maxSingleDose, row.maxSingleDoseUnit || "mg", doseUnit);
+    if (cap !== null && cap < doseLow) {
+      return { column: "max_single_dose", value: `${range} ${doseUnit} > ${row.maxSingleDose} ${row.maxSingleDoseUnit || "mg"}` };
+    }
+  }
+  if (row.maxPerDay !== null) {
+    const maxUnit = row.maxPerDayUnit || doseUnit;
+    const max = convertUnit(row.maxPerDay, maxUnit, doseUnit);
+    if (max !== null) {
+      const perDay = row.dosePeriod === "per day";
+      const total = perDay ? doseHigh : row.timesPerDayMax !== null ? doseHigh * row.timesPerDayMax : null;
+      if (total !== null && total > max * 1.01) {
+        const what = perDay ? `${range} ${doseUnit} a day` : `${range} ${doseUnit} × ${row.timesPerDayMax}`;
+        return { column: "max_per_day", value: `${what} > ${row.maxPerDay} ${maxUnit}` };
+      }
+    }
+  }
+  return null;
+}
 
 /** Parses the six tabs the app reads. Throws DrugSheetError when one is unusable. */
 export function parseDrugWorkbook(sheets: Map<string, string[][]>): ParsedDrugDatabase {
@@ -379,7 +428,9 @@ export function parseDrugWorkbook(sheets: Map<string, string[][]>): ParsedDrugDa
       version: r.int("version"),
       approved: r.yesNo("approved"),
     };
-    dosing.push({ ...values, hasErrors: r.bad });
+    const contradiction = dosingContradiction(values);
+    if (contradiction) issues.add(tabs.dosing.name, r.row, contradiction.column, contradiction.value, "inconsistent");
+    dosing.push({ ...values, hasErrors: r.bad || contradiction !== null });
   }
 
   const info = unique(
@@ -417,6 +468,8 @@ export function parseDrugWorkbook(sheets: Map<string, string[][]>): ParsedDrugDa
       code: r.text("label_code")!.toUpperCase(),
       textEn: r.text("text_en"),
       textTh: r.text("text_th"),
+      // Optional column: a warning that must reach the patient's label.
+      mustPrint: r.has("must_print") ? r.yesNo("must_print") : false,
       version: r.int("version"),
       approved: r.yesNo("approved"),
     }),

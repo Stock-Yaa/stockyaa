@@ -50,6 +50,10 @@ const users = {
   myPinTitle: "Cash drawer PIN",
   myPinDescription: "You enter this PIN to open, count and close a cash drawer, and to approve as a manager.",
   roleManager: "Manager",
+
+  // Dispensing label design (17 November 2026)
+  pharmacistLicense: "Pharmacist licence no.",
+  pharmacistLicenseHint: "For pharmacists: the number only, e.g. 12345 (the label adds ภ.). Printed with their name on dispensing labels. Leave blank for other staff.",
 };
 
 export default users;

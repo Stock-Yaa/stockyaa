@@ -34,6 +34,7 @@ export default async function UsersPage() {
         email: users.email,
         role: users.role,
         branchId: users.branchId,
+        pharmacistLicense: users.pharmacistLicense,
         isActive: users.isActive,
         lastLoginAt: users.lastLoginAt,
         // Whether a PIN is set, never the hash itself.

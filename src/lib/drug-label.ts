@@ -1,5 +1,5 @@
 import type { MessageKey, Translate } from "@/i18n/messages";
-import type { LabelSuggestion } from "./dosing";
+import { singularUnit, type LabelSuggestion } from "./dosing";
 
 /*
  * The text of a dispensing label from a LabelSuggestion, in the label's
@@ -81,16 +81,40 @@ const TIMING_KEYS: Record<string, MessageKey> = {
 const num = (n: number) => String(Math.round(n * 100) / 100);
 
 function unitText(t: Translate, unit: string, amount: number): string {
-  const key = unit.trim().toLowerCase().replace(/s$/, "");
+  const key = singularUnit(unit);
   const plural = amount !== 1 ? UNIT_PLURAL_KEYS[key] : undefined;
   const k = plural ?? UNIT_KEYS[key];
   return k ? t(k) : unit;
 }
 
-function amountText(t: Translate, low: number, high: number, unit: string): string {
-  const amount = low === high ? num(low) : t("drugLabel.range", { low: num(low), high: num(high) });
-  return t("drugLabel.amount", { amount, unit: unitText(t, unit, high) });
+const isHalf = (n: number) => !Number.isInteger(n) && Number.isInteger(n * 2);
+
+/** One amount with its unit; halves of a tablet in words ("ครึ่งเม็ด", "one and a half tablets"). */
+function oneAmount(t: Translate, n: number, unit: string): string {
+  if (singularUnit(unit) === "tablet" && isHalf(n)) {
+    const whole = Math.floor(n);
+    return whole === 0 ? t("drugLabel.halfTablet") : t("drugLabel.andAHalfTablets", { count: whole });
+  }
+  return `${num(n)} ${unitText(t, unit, n)}`;
 }
+
+/** The amount per dose: "1–2 tablets", or with halves "half a tablet to 1 tablet". */
+function amountText(t: Translate, low: number, high: number, unit: string): string {
+  if (low === high) return oneAmount(t, low, unit);
+  if (singularUnit(unit) === "tablet" && (isHalf(low) || isHalf(high))) {
+    return t("drugLabel.rangeWords", { low: oneAmount(t, low, unit), high: oneAmount(t, high, unit) });
+  }
+  return `${t("drugLabel.range", { low: num(low), high: num(high) })} ${unitText(t, unit, high)}`;
+}
+
+/** The verb that fits how the medicine is used ("Take", "Apply", …); Thai says รับประทาน for oral only. */
+const ROUTE_VERBS: Record<string, MessageKey> = {
+  oral: "drugLabel.verbOral",
+  skin: "drugLabel.verbApply",
+  inhaled: "drugLabel.verbInhale",
+  rectal: "drugLabel.verbInsert",
+  vaginal: "drugLabel.verbInsert",
+};
 
 const pick = (lang: LabelLanguage, en: string | null, th: string | null) =>
   (lang === "th" ? th || en : en || th) || null;
@@ -104,7 +128,10 @@ export function buildLabelText(s: LabelSuggestion, t: Translate, lang: LabelLang
   const d = s.directions;
   if (!d) return { medicine, indication: null, directions: [], limits: [], note: null, warnings };
 
-  const directions = [amountText(t, d.amountLow, d.amountHigh, d.amountUnit)];
+  // "รับประทานครั้งละ 1 เม็ด" / "Take 1 tablet"; other routes get their own verb.
+  const dose = t("drugLabel.dose", { dose: amountText(t, d.amountLow, d.amountHigh, d.amountUnit) });
+  const verb = ROUTE_VERBS[gpu?.route ?? ""] ?? "drugLabel.verbUse";
+  const directions = [t(verb, { text: dose })];
   const often: string[] = [];
   if (d.asNeeded) {
     often.push(
@@ -115,7 +142,10 @@ export function buildLabelText(s: LabelSuggestion, t: Translate, lang: LabelLang
     if (d.timesPerDayMax) often.push(t("drugLabel.atMostTimesADay", { count: num(d.timesPerDayMax) }));
   } else {
     if (d.timesPerDayMax) often.push(t("drugLabel.timesADay", { count: num(d.timesPerDayMax) }));
-    if (d.intervalHoursMin) often.push(t("drugLabel.hoursApart", { hours: num(d.intervalHoursMin) }));
+    // "Once a day, at least 24 hours apart" says the same thing twice.
+    if (d.intervalHoursMin && d.timesPerDayMax !== 1) {
+      often.push(t("drugLabel.hoursApart", { hours: num(d.intervalHoursMin) }));
+    }
   }
   if (often.length) directions.push(often.join(t("drugLabel.joiner")));
   const timing = d.timing ? TIMING_KEYS[d.timing] : undefined;

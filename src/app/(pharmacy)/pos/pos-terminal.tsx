@@ -458,41 +458,63 @@ export function PosTerminal({
             {t("pos.cart")}{" "}
             <span className="text-primary tabular-nums">({f.number(unitCount)})</span>
           </h2>
-          <DropdownMenu
-            label={t("pos.more")}
-            items={[
-              {
-                label: discountShown ? t("pos.removeDiscount") : t("pos.addDiscount"),
-                icon: Percent,
-                disabled: pending,
-                onSelect: () => {
-                  if (discountShown) setDiscountInput("");
-                  setShowDiscount(!discountShown);
+          <div className="flex items-center gap-1">
+            {/* Labels can be printed before the sale is completed, in a new tab. */}
+            {lines.length > 0 ? (
+              <Link
+                href={`/pos/labels?${new URLSearchParams({
+                  items: lines.map((line) => `${line.product.id}:${line.quantity}`).join(","),
+                  ...(selectedCustomer ? { patient: selectedCustomer.name } : {}),
+                }).toString()}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={buttonClass({ variant: "outline", size: "sm" })}
+              >
+                <Pill />
+                {t("dispensing.open")}
+              </Link>
+            ) : (
+              <Button variant="outline" size="sm" disabled>
+                <Pill />
+                {t("dispensing.open")}
+              </Button>
+            )}
+            <DropdownMenu
+              label={t("pos.more")}
+              items={[
+                {
+                  label: discountShown ? t("pos.removeDiscount") : t("pos.addDiscount"),
+                  icon: Percent,
+                  disabled: pending,
+                  onSelect: () => {
+                    if (discountShown) setDiscountInput("");
+                    setShowDiscount(!discountShown);
+                  },
                 },
-              },
-              // Tax receipts need a VAT-registered pharmacy.
-              ...(vatRate > 0
-                ? [
-                    {
-                      label: taxBuyer ? t("pos.editTaxReceipt") : t("pos.requestTaxReceipt"),
-                      icon: FileText,
-                      disabled: pending,
-                      onSelect: () => setBuyerDraft(taxBuyer ?? buyerFrom(selectedCustomer)),
-                    },
-                  ]
-                : []),
-              {
-                label: t("pos.clearCart"),
-                icon: Trash2,
-                tone: "danger",
-                disabled: pending || lines.length === 0,
-                onSelect: () => {
-                  setCart([]);
-                  refocusSearch();
+                // Tax receipts need a VAT-registered pharmacy.
+                ...(vatRate > 0
+                  ? [
+                      {
+                        label: taxBuyer ? t("pos.editTaxReceipt") : t("pos.requestTaxReceipt"),
+                        icon: FileText,
+                        disabled: pending,
+                        onSelect: () => setBuyerDraft(taxBuyer ?? buyerFrom(selectedCustomer)),
+                      },
+                    ]
+                  : []),
+                {
+                  label: t("pos.clearCart"),
+                  icon: Trash2,
+                  tone: "danger",
+                  disabled: pending || lines.length === 0,
+                  onSelect: () => {
+                    setCart([]);
+                    refocusSearch();
+                  },
                 },
-              },
-            ]}
-          />
+              ]}
+            />
+          </div>
         </div>
 
         {lines.length === 0 ? (

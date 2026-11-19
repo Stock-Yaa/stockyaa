@@ -9,12 +9,13 @@ import type {
 /*
  * Works out the directions for a dispensing label from the drug database,
  * following the client's "How to use the drug file for dosing and labels"
- * (14 November 2026): product (tpu_id) -> GPU -> ingredient -> dose rule.
+ * (14 November 2026): product (tpu_id) -> GPU -> ingredient -> dose rule,
+ * with the safety rules of her review of 17 November 2026.
  *
  * Pure: the caller loads the rows (src/lib/drug-database.ts). When anything
- * is missing, unclear or not approved, the result has no directions and a
- * reason; the label still shows the medicine and the pharmacist types the
- * directions. It never fills a gap with a guess.
+ * is missing, unclear, not approved or implausible, the result has no
+ * directions and a reason; the label still shows the medicine and the
+ * pharmacist types the directions. It never fills a gap with a guess.
  */
 
 export type TmtProductRow = typeof drugTmtProducts.$inferSelect;
@@ -24,7 +25,8 @@ export type DosingRow = typeof drugDosing.$inferSelect;
 export type WarningLabelRow = typeof drugWarningLabels.$inferSelect;
 
 export type Patient = {
-  group: "adult" | "child";
+  /** Null until the pharmacist chooses: there is no default group. */
+  group: "adult" | "child" | null;
   /** Age in whole months; required for a child. */
   ageMonths: number | null;
   weightKg: number | null;
@@ -43,6 +45,7 @@ export type NoDirectionsReason =
   | "noGpu"
   | "gpuNotApproved"
   | "noDoseMode"
+  | "needsGroup"
   | "needsAge"
   | "noRowFits"
   | "rowsTie"
@@ -57,6 +60,8 @@ export type NoDirectionsReason =
   | "unitMismatch"
   | "noRoundTo"
   | "roundingOff"
+  | "exceedsDailyMax"
+  | "implausibleAmount"
   | "noAmount";
 
 export type Directions = {
@@ -77,6 +82,8 @@ export type Directions = {
   maxDays: number | null;
   noteEn: string | null;
   noteTh: string | null;
+  /** The dose was brought down to the daily maximum divided by the times a day. */
+  cappedAtDailyMax: boolean;
   /** How a rule or lead amount was worked out, for the pharmacist to check. */
   calculation: {
     ingredient: string;
@@ -89,7 +96,8 @@ export type Directions = {
   } | null;
 };
 
-export type IndicationChoice = { indicationEn: string | null; indicationTh: string | null };
+/** One use of the medicine to choose from; `sheetRow` identifies it. */
+export type IndicationChoice = { sheetRow: number; indicationEn: string | null; indicationTh: string | null };
 
 export type LabelSuggestion = {
   product: TmtProductRow;
@@ -98,7 +106,10 @@ export type LabelSuggestion = {
   doseMode: string | null;
   directions: Directions | null;
   reason: NoDirectionsReason | null;
-  /** Set when fitting Dosing rows differ only by indication: pick one with `indication`. */
+  /**
+   * Set when rows for different uses fit the patient: the pharmacist picks
+   * one (by its sheet row, `indicationRow`) before any directions are given.
+   */
   indicationChoices: IndicationChoice[];
   warnings: WarningLabelRow[];
   /** True when test mode let an unapproved row through. */
@@ -108,19 +119,44 @@ export type LabelSuggestion = {
 export type SuggestOptions = {
   /** Test mode: treat every row as approved. Never for a real label. */
   includeUnapproved?: boolean;
-  /** Index into indicationChoices, once the pharmacist has picked one. */
-  indication?: number;
+  /** Sheet row of the chosen indication. Never preselected. */
+  indicationRow?: number;
 };
 
 const MAX_ROUNDING_CHANGE = 0.15;
 
+/**
+ * The most of one unit a single dose may be; above it, no suggestion. Proposed
+ * in the client's review of 17 November 2026, to be confirmed by her.
+ */
+export const PLAUSIBLE_DOSE_LIMITS: Record<string, number> = {
+  tablet: 10,
+  capsule: 10,
+  lozenge: 10,
+  sachet: 10,
+  suppository: 10,
+  pessary: 10,
+  ml: 60,
+};
+
 /** Doses already counted in the unit given; no strength conversion. */
-const COUNT_UNITS = new Set(["drop", "drops", "puff", "puffs", "application", "applications", "dose", "doses"]);
+const COUNT_UNITS = new Set(["drop", "puff", "application", "dose"]);
 
 /** Forms whose dose may come only from a rule that names the form. */
 const RELEASE_FORM = /prolonged-release|modified-release/;
 
+const EPSILON = 1e-9;
+
 const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+
+/** "Tablets" -> "tablet", "pessaries" -> "pessary", "patches" -> "patch", "mL" -> "ml". */
+export function singularUnit(unit: string | null | undefined): string {
+  const u = norm(unit);
+  if (u.endsWith("ies")) return `${u.slice(0, -3)}y`;
+  if (/(ch|sh|x)es$/.test(u)) return u.slice(0, -2);
+  if (u.endsWith("s") && !u.endsWith("ss") && u.length > 2) return u.slice(0, -1);
+  return u;
+}
 
 /** Units with a fixed ratio, as factor to a base unit. */
 const UNIT_FACTORS: Record<string, { base: string; factor: number }> = {
@@ -149,11 +185,14 @@ const inRange = (value: number | null, min: number | null, max: number | null) =
   value === null ? min === null && max === null : (min === null || value >= min) && (max === null || value <= max);
 
 type Banded = {
+  sheetRow: number;
   patientGroup: string | null;
   minAgeMonths: number | null;
   maxAgeMonths: number | null;
   minWeightKg: number | null;
   maxWeightKg: number | null;
+  indicationEn: string | null;
+  indicationTh: string | null;
 };
 
 const hasWeightRange = (r: Banded) => r.minWeightKg !== null || r.maxWeightKg !== null;
@@ -181,21 +220,63 @@ function fits(row: Banded, patient: Patient): boolean {
   return true;
 }
 
-function roundTo(value: number, step: number): number {
-  return Math.round(Math.round(value / step) * step * 1e6) / 1e6;
+const fix = (n: number) => Math.round(n * 1e6) / 1e6;
+const roundNearest = (value: number, step: number) => fix(Math.round(value / step) * step);
+const roundDown = (value: number, step: number) => fix(Math.floor(value / step + EPSILON) * step);
+const roundUp = (value: number, step: number) => fix(Math.ceil(value / step - EPSILON) * step);
+const offBy = (rounded: number, exact: number) =>
+  rounded <= 0 || exact <= 0 || Math.abs(rounded - exact) / exact > MAX_ROUNDING_CHANGE;
+
+/**
+ * `choices` lists the indications whenever there are several, also once one
+ * has been chosen, so the pharmacist can see it and switch.
+ */
+type Picked<T> = ({ row: T } | { tie: true } | { choose: true }) & { choices: IndicationChoice[] };
+
+/**
+ * The row for the patient among those that fit. Rows are grouped by their
+ * indication; inside a group, `prefer` applies the guide's order (weight
+ * range, then per kg, then fixed). One group gives its row. Several groups
+ * are offered as a choice when every one has its own indication (an empty
+ * indication cannot be told apart, so that is a tie), and the chosen one
+ * gives its row. Nothing is ever preselected.
+ */
+function pickRow<T extends Banded>(fitting: T[], prefer: (rows: T[]) => T[], chosenRow?: number): Picked<T> {
+  const groups = new Map<string, T[]>();
+  for (const row of fitting) {
+    const key = `${norm(row.indicationEn)}|${norm(row.indicationTh)}`;
+    groups.set(key, [...(groups.get(key) ?? []), row]);
+  }
+  const options = [...groups.entries()].map(([key, rows]) => ({ key, rows: prefer(rows) }));
+  const one = (rows: T[], choices: IndicationChoice[]): Picked<T> =>
+    rows.length === 1 ? { row: rows[0], choices } : { tie: true, choices };
+  if (options.length === 1) return one(options[0].rows, []);
+  if (options.some((o) => o.key === "|")) return { tie: true, choices: [] };
+  const choices = options
+    .map((o) => o.rows[0])
+    .sort((a, b) => a.sheetRow - b.sheetRow)
+    .map((r) => ({ sheetRow: r.sheetRow, indicationEn: r.indicationEn, indicationTh: r.indicationTh }));
+  const chosen = options.find((o) => o.rows[0].sheetRow === chosenRow);
+  return chosen ? one(chosen.rows, choices) : { choose: true, choices };
 }
 
-/** Rows that agree on everything except their indication. */
-function differOnlyByIndication(rows: DosingRow[]): boolean {
-  const strip = (r: DosingRow) => {
-    const rest: Partial<DosingRow> = { ...r };
-    for (const k of ["id", "sheetRow", "indicationEn", "indicationTh", "noteEn", "noteTh", "source", "version", "approved", "hasErrors"] as const) {
-      delete rest[k];
-    }
-    return JSON.stringify(rest);
-  };
-  const first = strip(rows[0]);
-  return rows.every((r) => strip(r) === first);
+/** Solid forms taken whole: only a tablet may be halved. */
+const SOLID_UNITS = new Set(["tablet", "capsule", "lozenge", "sachet", "suppository", "pessary"]);
+
+/**
+ * Whether an amount can be given as it is: a solid form is a whole number,
+ * except a half tablet, allowed only where the GPU row rounds to 0.5.
+ */
+function measurable(amount: number, unit: string, roundTo: number | null): boolean {
+  const u = singularUnit(unit);
+  if (!SOLID_UNITS.has(u) || Number.isInteger(amount)) return true;
+  return u === "tablet" && roundTo === 0.5 && Number.isInteger(amount * 2);
+}
+
+/** A dose above the plausible limit for its unit (10 tablets, 60 mL, …). */
+function implausible(amount: number, unit: string): boolean {
+  const limit = PLAUSIBLE_DOSE_LIMITS[singularUnit(unit)];
+  return limit !== undefined && amount > limit + EPSILON;
 }
 
 export function suggestLabel(data: DrugData, patient: Patient, options: SuggestOptions = {}): LabelSuggestion {
@@ -240,19 +321,31 @@ export function suggestLabel(data: DrugData, patient: Patient, options: SuggestO
     .map(markUsed);
 
   if (!doseMode || doseMode === "none") return done({ reason: "noDoseMode" });
+  if (patient.group === null) return done({ reason: "needsGroup" });
   if (patient.group === "child" && patient.ageMonths === null) return done({ reason: "needsAge" });
 
   // Step 3, fixed: the directions are written on the GPU row that fits.
   if (doseMode === "fixed") {
     const fitting = sorted.filter((r) => fits(r, patient));
     if (fitting.length === 0) return done({ reason: "noRowFits" });
-    const preferred = fitting.some(hasWeightRange) ? fitting.filter(hasWeightRange) : fitting;
-    if (preferred.length > 1) return done({ reason: "rowsTie" });
-    const row = preferred[0];
+    const picked = pickRow(
+      fitting,
+      (rows) => (rows.some(hasWeightRange) ? rows.filter(hasWeightRange) : rows),
+      options.indicationRow,
+    );
+    base.indicationChoices = picked.choices;
+    if ("choose" in picked) return done({});
+    if ("tie" in picked) return done({ reason: "rowsTie" });
+    const row = picked.row;
     if (row.hasErrors) return done({ reason: "rowHasErrors" });
     if (!allow(row)) return done({ reason: "rowNotApproved" });
     markUsed(row);
     if (row.amountPerDose === null || !row.amountUnit) return done({ reason: "noAmount" });
+    const high = row.amountPerDoseMax ?? row.amountPerDose;
+    if (implausible(high, row.amountUnit)) return done({ reason: "implausibleAmount" });
+    if (!measurable(row.amountPerDose, row.amountUnit, shared.roundTo) || !measurable(high, row.amountUnit, shared.roundTo)) {
+      return done({ reason: "roundingOff" });
+    }
     return done({
       directions: {
         source: "gpu",
@@ -260,7 +353,7 @@ export function suggestLabel(data: DrugData, patient: Patient, options: SuggestO
         indicationEn: row.indicationEn,
         indicationTh: row.indicationTh,
         amountLow: row.amountPerDose,
-        amountHigh: row.amountPerDoseMax ?? row.amountPerDose,
+        amountHigh: high,
         amountUnit: row.amountUnit,
         timesPerDayMax: row.timesPerDayMax,
         intervalHoursMin: row.intervalHoursMin,
@@ -271,6 +364,7 @@ export function suggestLabel(data: DrugData, patient: Patient, options: SuggestO
         maxDays: row.maxDays,
         noteEn: row.noteEn,
         noteTh: row.noteTh,
+        cappedAtDailyMax: false,
         calculation: null,
       },
     });
@@ -299,54 +393,51 @@ export function suggestLabel(data: DrugData, patient: Patient, options: SuggestO
   // 3: the patient.
   const fitting = rows.filter((r) => fits(r, patient));
   if (fitting.length === 0) return done({ reason: "noRowFits" });
-  // 4: weight range, then per kg (weight known), then fixed.
+  // 4: by indication; for one indication, weight range, then per kg (weight
+  // known), then fixed. A per kg row without the weight asks for it.
   const perKg = (r: DosingRow) => norm(r.doseBasis) === "per kg";
-  const kinds = [
-    fitting.filter(hasWeightRange),
-    patient.weightKg !== null ? fitting.filter((r) => !hasWeightRange(r) && perKg(r)) : [],
-    fitting.filter((r) => !hasWeightRange(r) && !perKg(r)),
-  ];
-  let candidates = kinds.find((k) => k.length > 0);
-  if (!candidates) return done({ reason: "needsWeight" });
-  if (candidates.length > 1) {
-    if (!differOnlyByIndication(candidates)) return done({ reason: "rowsTie" });
-    const choices = candidates.map((r) => ({ indicationEn: r.indicationEn, indicationTh: r.indicationTh }));
-    const picked = options.indication;
-    if (picked === undefined || !candidates[picked]) {
-      return done({ indicationChoices: choices });
-    }
-    base.indicationChoices = choices;
-    candidates = [candidates[picked]];
-  }
-  const rule = candidates[0];
+  const prefer = (group: DosingRow[]) =>
+    [
+      group.filter(hasWeightRange),
+      patient.weightKg !== null ? group.filter((r) => !hasWeightRange(r) && perKg(r)) : [],
+      group.filter((r) => !hasWeightRange(r) && !perKg(r)),
+    ].find((k) => k.length > 0) ?? group;
+  const picked = pickRow(fitting, prefer, options.indicationRow);
+  base.indicationChoices = picked.choices;
+  if ("choose" in picked) return done({});
+  if ("tie" in picked) return done({ reason: "rowsTie" });
+  const rule = picked.row;
   if (rule.hasErrors) return done({ reason: "rowHasErrors" });
   if (!allow(rule)) return done({ reason: "rowNotApproved" });
   markUsed(rule);
 
-  // The dose, in dose_unit.
+  // The dose, in dose_unit. dose_period says whether it is one dose or the
+  // day's total, for every basis; an empty period is never assumed.
   if (rule.doseLow === null || !rule.doseUnit) return done({ reason: "noAmount" });
   let doseUnit = rule.doseUnit.trim();
   let low = rule.doseLow;
   let high = rule.doseHigh ?? rule.doseLow;
+  const period = norm(rule.dosePeriod);
   if (perKg(rule)) {
     if (patient.weightKg === null) return done({ reason: "needsWeight" });
-    const period = norm(rule.dosePeriod);
     if (!period) return done({ reason: "noDosePeriod" });
     doseUnit = doseUnit.replace(/\s*\/\s*kg$/i, "");
     low *= patient.weightKg;
     high *= patient.weightKg;
-    if (period === "per day") {
-      if (!rule.timesPerDayMax) return done({ reason: "noTimesPerDay" });
-      low /= rule.timesPerDayMax;
-      high /= rule.timesPerDayMax;
-    }
   }
-  // Cap. Caps entered before 13 November 2026 have no unit and are in mg.
+  if (!period) return done({ reason: "noDosePeriod" });
+  if (period === "per day") {
+    if (!rule.timesPerDayMax) return done({ reason: "noTimesPerDay" });
+    low /= rule.timesPerDayMax;
+    high /= rule.timesPerDayMax;
+  }
+  // Cap one dose. Caps entered before 13 November 2026 have no unit and are in mg.
+  let capDose: number | null = null;
   if (rule.maxSingleDose !== null) {
-    const cap = convertUnit(rule.maxSingleDose, rule.maxSingleDoseUnit || "mg", doseUnit);
-    if (cap === null) return done({ reason: "unitMismatch" });
-    low = Math.min(low, cap);
-    high = Math.min(high, cap);
+    capDose = convertUnit(rule.maxSingleDose, rule.maxSingleDoseUnit || "mg", doseUnit);
+    if (capDose === null) return done({ reason: "unitMismatch" });
+    low = Math.min(low, capDose);
+    high = Math.min(high, capDose);
   }
 
   // Convert to the product's units (tablets, mL, …): strength_amount
@@ -355,7 +446,7 @@ export function suggestLabel(data: DrugData, patient: Patient, options: SuggestO
   const { strengthAmount, strengthUnit, perAmount, perUnit } = ingredient;
   const hasStrength =
     strengthAmount !== null && !!strengthUnit && perAmount !== null && perAmount > 0 && !!perUnit;
-  const isCount = COUNT_UNITS.has(norm(doseUnit));
+  const isCount = COUNT_UNITS.has(singularUnit(doseUnit));
   const amountUnit = isCount || !perUnit ? doseUnit : perUnit;
   /** An amount in `unit` -> the amount unit; null when it cannot be converted. */
   const toAmount = (value: number, unit: string): number | null => {
@@ -367,33 +458,15 @@ export function suggestLabel(data: DrugData, patient: Patient, options: SuggestO
   if (!isCount && !hasStrength && (!perUnit || norm(doseUnit) !== norm(perUnit))) {
     return done({ reason: "noStrength" });
   }
-  const exactLow = toAmount(low, doseUnit);
-  const exactHigh = toAmount(high, doseUnit);
+  let exactLow = toAmount(low, doseUnit);
+  let exactHigh = toAmount(high, doseUnit);
   if (exactLow === null || exactHigh === null) return done({ reason: "unitMismatch" });
+  const capAmount = capDose === null ? null : toAmount(capDose, doseUnit);
 
-  // Round to a measurable amount; no suggestion if that moves it over 15%.
-  let amountLow = exactLow;
-  let amountHigh = exactHigh;
-  if (!isCount) {
-    const step = shared.roundTo;
-    if (step === null || step <= 0) {
-      if (norm(amountUnit) !== norm(doseUnit)) return done({ reason: "noRoundTo" });
-    } else {
-      amountLow = roundTo(exactLow, step);
-      amountHigh = roundTo(exactHigh, step);
-      for (const [rounded, exact] of [[amountLow, exactLow], [amountHigh, exactHigh]]) {
-        if (rounded <= 0 || Math.abs(rounded - exact) / exact > MAX_ROUNDING_CHANGE) {
-          return done({ reason: "roundingOff" });
-        }
-      }
-    }
-  }
-
-  // Daily maximum: the lower of max_per_day and the amount times a day.
-  // `maxExact` is in the same terms as the unrounded amount, `maxPerDay` as
-  // printed; they differ only for a limit counted in doses.
-  let maxPerDay: number | null = null;
-  let maxExact: number | null = null;
+  // The daily maximum, in amount units. "8 doses" limits the number of doses,
+  // not the amount of one.
+  let maxDayAmount: number | null = null;
+  let maxDoses: number | null = null;
   if (rule.maxPerDay !== null) {
     let unit = rule.maxPerDayUnit || doseUnit;
     let value = rule.maxPerDay;
@@ -402,23 +475,70 @@ export function suggestLabel(data: DrugData, patient: Patient, options: SuggestO
       value *= patient.weightKg;
       unit = unit.replace(/\s*\/\s*kg$/i, "");
     }
-    if (/^doses?$/i.test(unit.trim()) && !/^doses?$/i.test(amountUnit.trim())) {
-      // "8 doses" a day: eight times the amount of one dose.
-      maxExact = value * exactHigh;
-      maxPerDay = value * amountHigh;
+    if (singularUnit(unit) === "dose" && singularUnit(amountUnit) !== "dose") {
+      maxDoses = value;
     } else {
-      const converted = toAmount(value, unit);
-      if (converted === null) return done({ reason: "unitMismatch" });
-      maxExact = converted;
-      maxPerDay = converted;
+      maxDayAmount = toAmount(value, unit);
+      if (maxDayAmount === null) return done({ reason: "unitMismatch" });
     }
   }
-  if (rule.timesPerDayMax !== null) {
-    const byTimes = amountHigh * rule.timesPerDayMax;
-    // Compared with the exact amount: 960 mg a day at 4.8 mL (rounded to 5)
-    // four times is not a stricter limit, only the rounding showing.
-    const stricter = maxExact !== null && maxExact < exactHigh * rule.timesPerDayMax - 1e-6;
-    maxPerDay = stricter ? Math.min(maxPerDay!, byTimes) : byTimes;
+
+  // One dose must fit inside the daily maximum. A weight-based dose above it is
+  // brought down to it; a fixed dose whose low end is above it is a bad row.
+  const perDoseLimit = maxDayAmount === null ? null : maxDayAmount / (rule.timesPerDayMax || 1);
+  let cappedAtDailyMax = false;
+  if (perDoseLimit !== null) {
+    if (exactHigh > perDoseLimit + EPSILON) cappedAtDailyMax = true;
+    exactHigh = Math.min(exactHigh, perDoseLimit);
+    if (exactLow > perDoseLimit + EPSILON) {
+      if (!perKg(rule)) return done({ reason: "exceedsDailyMax" });
+      exactLow = perDoseLimit;
+    }
+  }
+
+  // Round to a measurable amount, never above the single-dose cap or the
+  // per-dose share of the daily maximum; no suggestion if that moves it over
+  // 15%. When only the low end of a range fails, it is raised to the next step.
+  let amountLow = exactLow;
+  let amountHigh = exactHigh;
+  if (!isCount) {
+    const step = shared.roundTo;
+    if (step === null || step <= 0) {
+      if (norm(amountUnit) !== norm(doseUnit)) return done({ reason: "noRoundTo" });
+    } else {
+      const ceiling = Math.min(capAmount ?? Infinity, perDoseLimit ?? Infinity);
+      const round = (value: number) => {
+        const nearest = roundNearest(value, step);
+        return nearest > ceiling + EPSILON ? roundDown(value, step) : nearest;
+      };
+      amountHigh = round(exactHigh);
+      if (offBy(amountHigh, exactHigh)) return done({ reason: "roundingOff" });
+      amountLow = round(exactLow);
+      if (offBy(amountLow, exactLow)) {
+        amountLow = roundUp(exactLow, step);
+        if (amountLow > amountHigh + EPSILON || amountLow <= 0) return done({ reason: "roundingOff" });
+      }
+    }
+  }
+  if (implausible(amountHigh, amountUnit)) return done({ reason: "implausibleAmount" });
+  if (!measurable(amountLow, amountUnit, shared.roundTo) || !measurable(amountHigh, amountUnit, shared.roundTo)) {
+    return done({ reason: "roundingOff" });
+  }
+
+  // The daily maximum printed: the lower of max_per_day and the amount times
+  // a day, compared with the exact amount (960 mg a day at 4.8 mL rounded to 5
+  // four times is not a stricter limit, only the rounding showing).
+  const times = rule.timesPerDayMax;
+  let maxPerDay: number | null = null;
+  if (maxDoses !== null) {
+    maxPerDay = maxDoses * amountHigh;
+    if (times !== null) maxPerDay = Math.min(maxPerDay, amountHigh * times);
+  } else if (times !== null) {
+    const byTimes = amountHigh * times;
+    const stricter = maxDayAmount !== null && maxDayAmount < exactHigh * times - 1e-6;
+    maxPerDay = stricter ? Math.min(maxDayAmount!, byTimes) : byTimes;
+  } else {
+    maxPerDay = maxDayAmount;
   }
 
   return done({
@@ -439,6 +559,7 @@ export function suggestLabel(data: DrugData, patient: Patient, options: SuggestO
       maxDays: rule.maxDays,
       noteEn: rule.noteEn,
       noteTh: rule.noteTh,
+      cappedAtDailyMax,
       calculation: {
         ingredient: ingredient.ingredient,
         doseLow: low,

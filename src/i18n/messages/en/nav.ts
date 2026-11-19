@@ -51,6 +51,7 @@ const nav = {
   pharmacies: "Pharmacies",
   plans: "Plans",
   drugDatabase: "Drug database",
+  printedLabels: "Printed labels",
   payments: "Payments",
   stripe: "Stripe",
   account: "My account",

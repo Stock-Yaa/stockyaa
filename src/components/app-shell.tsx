@@ -34,6 +34,7 @@ import {
   ShoppingCart,
   Star,
   Store,
+  Tags,
   TriangleAlert,
   Truck,
   UserCog,
@@ -63,6 +64,7 @@ const PHARMACY_NAV: NavEntry[] = [
     items: [
       { href: "/pos", label: "nav.pos", icon: ShoppingCart },
       { href: "/sales", label: "nav.salesHistory", icon: History },
+      { href: "/dispensed-labels", label: "nav.printedLabels", icon: Tags, managersOnly: true },
       { href: "/cash-drawer", label: "nav.cashDrawer", icon: Calculator },
     ],
   },
@@ -171,9 +173,12 @@ const PLATFORM_NAV: NavEntry[] = [
  * The pharmacy menu for this user: staff lose the admin-only links, and a
  * single-branch pharmacy loses the links that only make sense with several.
  */
-function pharmacyNav(isAdmin: boolean, multiBranch: boolean): NavEntry[] {
+function pharmacyNav(role: string, multiBranch: boolean): NavEntry[] {
+  const isAdmin = role === "admin";
   const visible = (link: NavLink) =>
-    (isAdmin || !link.adminOnly) && (multiBranch || !link.multiBranchOnly);
+    (isAdmin || !link.adminOnly) &&
+    (isAdmin || role === "manager" || !link.managersOnly) &&
+    (multiBranch || !link.multiBranchOnly);
   return PHARMACY_NAV.flatMap((entry): NavEntry[] => {
     if (!("items" in entry)) return visible(entry) ? [entry] : [];
     const items = entry.items.filter(visible);
@@ -214,7 +219,7 @@ export function AppShell({
   const t = useT();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const entries =
-    variant === "platform" ? PLATFORM_NAV : pharmacyNav(user.role === "admin", multiBranch);
+    variant === "platform" ? PLATFORM_NAV : pharmacyNav(user.role, multiBranch);
   const home = variant === "platform" ? "/superadmin" : "/dashboard";
 
   const brand = (
